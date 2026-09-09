@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>Interactive YouTube Video Quiz</title>
+
+  <style>
+    :root {
+      --page: #eef3f9;
+      --surface: #ffffff;
+      --surface-soft: #f7f9fc;
+      --text: #172033;
+      --muted: #61708a;
+      --border: #d8e0eb;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --danger: #dc2626;
+      --success: #15803d;
+      --warning-bg: #fff7df;
+      --warning-border: #f4c95d;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background: var(--page);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
+    .page {
+      display: grid;
+      grid-template-columns: minmax(360px, 1.08fr) minmax(360px, 0.92fr);
+      gap: 16px;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .panel {
+      min-width: 0;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+      box-shadow: 0 3px 12px rgba(31, 45, 61, 0.06);
+    }
+
+    h1, h2, h3 { margin-top: 0; }
+    h1 { margin-bottom: 8px; font-size: 1.35rem; }
+    h2 { margin-bottom: 12px; font-size: 1.12rem; }
+    h3 { margin-bottom: 8px; font-size: 1rem; }
+
+    .help, .note {
+      color: var(--muted);
+      font-size: 0.91rem;
+      line-height: 1.45;
+    }
+
+    .help { margin: 0 0 16px; }
+    .note { margin: 10px 0 0; }
+
+    .control-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .control-row label {
+      flex: 0 0 auto;
+      font-weight: 650;
+      font-size: 0.92rem;
+    }
+
+    input, select, button, textarea {
+      font: inherit;
+    }
+
+    input[type="url"], input[type="text"], input[type="number"] {
+      width: 100%;
+      min-width: 0;
+      min-height: 43px;
+      padding: 10px 12px;
+      border: 1px solid #adb9cb;
+      border-radius: 8px;
+      color: var(--text);
+      background: #fff;
+    }
+
+    input:focus, select:focus, button:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, 0.22);
+      outline-offset: 1px;
+      border-color: var(--primary);
+    }
+
+    button {
+      min-height: 42px;
+      padding: 9px 14px;
+      border: 0;
+      border-radius: 8px;
+      color: #fff;
+      background: var(--primary);
+      font-weight: 650;
+      cursor: pointer;
+    }
+
+    button:hover { background: var(--primary-hover); }
+    button.secondary { background: #52627a; }
+    button.secondary:hover { background: #3d4c62; }
+    button.danger { background: var(--danger); }
+    button.danger:hover { background: #b91c1c; }
+    button.small { min-height: 34px; padding: 6px 10px; font-size: 0.84rem; }
+    button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+    .message {
+      min-height: 22px;
+      margin: 4px 0 10px;
+      color: var(--danger);
+      font-size: 0.9rem;
+    }
+
+    .video-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      border-radius: 10px;
+      background: #111827;
+    }
+
+    #player { width: 100%; height: 100%; }
+
+    .open-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .open-link {
+      display: inline-flex;
+      min-height: 38px;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 12px;
+      border-radius: 8px;
+      color: #fff;
+      background: #52627a;
+      font-size: 0.87rem;
+      font-weight: 650;
+      text-decoration: none;
+    }
+
+    .mode-bar {
+      display: flex;
+      gap: 8px;
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .mode-button { background: #e4eaf3; color: #34435a; }
+    .mode-button:hover { background: #d6dfec; }
+    .mode-button.active { color: #fff; background: var(--primary); }
+
+    .teacher-toolbar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 14px;
+      padding: 14px;
+      border-radius: 10px;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+    }
+
+    .teacher-toolbar label { display: block; margin-bottom: 6px; font-size: 0.9rem; font-weight: 650; }
+    .teacher-toolbar input { max-width: 160px; }
+
+    .question-list { display: grid; gap: 14px; }
+
+    .question-editor {
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .question-editor-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .question-editor-head h3 { margin: 0; }
+
+    .field-label {
+      display: block;
+      margin: 10px 0 5px;
+      font-size: 0.85rem;
+      font-weight: 650;
+      color: #3f4f67;
+    }
+
+    .time-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+
+    .option-row {
+      display: grid;
+      grid-template-columns: 30px 1fr 54px;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+    }
+
+    .option-letter {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      color: #fff;
+      background: #60718a;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .answer-radio { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; color: #4a5970; }
+
+    .student-intro {
+      padding: 13px;
+      margin-bottom: 14px;
+      border: 1px solid var(--warning-border);
+      border-radius: 10px;
+      background: var(--warning-bg);
+      color: #6b4d00;
+      font-size: 0.91rem;
+      line-height: 1.45;
+    }
+
+    .student-question {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface-soft);
+    }
+
+    .student-question[hidden], .teacher-view[hidden], .student-view[hidden] { display: none; }
+
+    .question-status {
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 650;
+    }
+
+    .student-question-text {
+      margin: 0 0 14px;
+      font-size: 1.04rem;
+      font-weight: 650;
+      line-height: 1.45;
+    }
+
+    .answers { display: grid; gap: 9px; }
+
+    .answer-choice {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      width: 100%;
+      min-height: 46px;
+      padding: 11px 12px;
+      border: 1px solid #b9c5d5;
+      border-radius: 8px;
+      color: var(--text);
+      background: #fff;
+      text-align: left;
+      font-weight: 500;
+    }
+
+    .answer-choice:hover { border-color: var(--primary); background: #f4f8ff; }
+    .answer-choice .letter { font-weight: 750; color: var(--primary); }
+
+    .feedback {
+      min-height: 24px;
+      margin: 13px 0 0;
+      font-size: 0.92rem;
+      font-weight: 650;
+    }
+
+    .feedback.error { color: var(--danger); }
+    .feedback.success { color: var(--success); }
+
+    .progress {
+      padding: 11px 12px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      background: #eaf1ff;
+      color: #264b8e;
+      font-size: 0.9rem;
+      font-weight: 650;
+    }
+
+    .empty {
+      padding: 16px;
+      border: 1px dashed #b8c5d6;
+      border-radius: 10px;
+      color: var(--muted);
+      background: var(--surface-soft);
+      line-height: 1.45;
+    }
+
+    @media (max-width: 940px) {
+      .page { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      .page { gap: 10px; padding: 10px; }
+      .panel { padding: 15px; }
+      .control-row, .open-row { flex-direction: column; align-items: stretch; }
+      .teacher-toolbar { grid-template-columns: 1fr; }
+      .teacher-toolbar input { max-width: none; }
+      .control-row button, .open-link { width: 100%; }
+      .time-row { grid-template-columns: 1fr; }
+    }
+  </style>
+<script type="text/javascript" nonce="8aed6a628ed3488b96ea2cd77a9" src="//local.adguard.org?ts=1788941434992&amp;type=content-script&amp;dmn=ppl-ai-code-interpreter-files.s3.amazonaws.com&amp;url=https%3A%2F%2Fppl-ai-code-interpreter-files.s3.amazonaws.com%2Fask-engine%2Fdirect-files%2Fb1ccde86bf3613a14b9788f95660fca4%2F19a70230-a7b3-40a7-b512-037947fe8832%2Ffaa96152.html%3Fresponse-content-disposition%3Dattachment%253B%2520filename%253D%2522interactive_youtube_quiz.html%2522%253B%2520filename%252A%253DUTF-8%2527%2527interactive_youtube_quiz.html%26AWSAccessKeyId%3DASIA2F3EMEYERRZXGJVN%26Signature%3DAab25flRluBuDbX56FElHjczOjo%253D%26x-amz-security-token%3DIQoJb3JpZ2luX2VjEKH%252F%252F%252F%252F%252F%252F%252F%252F%252F%252FwEaCXVzLWVhc3QtMSJIMEYCIQC6e5mRJsLinPKH4q34AaqL5nbQvG0CN6Y5axGcDjtHdQIhAKDUtf3aD2EZf4CQhRyj6yRA4aupgLeoxMPjQSfLwKaJKvMECGoQARoMNjk5NzUzMzA5NzA1Igyu8QaUpd6NTc%252F6hwMq0AQlIvaMt0zgphZZM5O1XCiuBQGkZ9Q8xdHFCO7qM%252FtIl5Q53HWuIS8xzxLhl085vlOPpW%252FZgYNO1MU7zaSxBUcqkOedQgetJSSc49UmGht8X01bUucsA4v8TfwVvRR0WasG%252FQtWHpiu2PIRWHWWHLSshV45KxGuNS9VwrZH9D3wuky6QVwwdaGjHXnz84QlrkT6QL3ik4GG%252Bkce5DA0ET5JdbbGifqOkpl%252BjToU8aRGKkP%252FOh5AUQcHwiwFXNIA5MyBx2U7WRUhV0bB6Pg4QZMbjWQa%252Bc0ludaW%252BvrDdktIcppZbDHxINPfQXXnJCK%252Bxp47LQ0Jlx2gFAS3NkqcILvuJzxfthtB5fmyL1g9E4E5G48czFdP5m%252FeFQiX4oSkT1mkWyYwEKvIr5FiTZNstK16xpEt9IAs5IO8LuL8LknYam%252F9ERZtPBtND4pXYjpikIiBzaX6OsyPCIyRsCWJanQZ5COOyvOEFxJcHPt302ZETE%252BqArwdhR3fds%252Bz5h3RX6mcVa39aADpHiqikTsvAfOJ%252BJuCMAPmnCJgqFfvutFXfVld8%252BTeomcOaAS0BFmuKU7qR%252FpyO9h9Lr39fTsOuNfOaZ4xbQX4JztX8YJX%252FXgjssDFE%252BCT65N%252BDo%252FrCdjcuNytBaykQ5Ja1YUhon2BICW21Mcgg1edVlmABehTUNCi%252BJN2YuGFeeQNy88xILYm%252BvxzPicxtW07XrOlObw3QKDPtnomje6oBCUYxOemuKBlEgsebZtR6x75LUtrg%252BhIMUCBvGCeoNnJchzvHuAWT83dMIa%252FhNUGOpcBJ7d1CQ4jWwjz8fhawd2xKaj9OY%252BbnUFEYdJ9pRVTdUr6YYFfU%252F%252Bt%252BaYJl%252F0TwFS0k51ZRBRE%252Bk3p%252B79sW5pAxbFk1WnZVXAwLBTLMJFANm3c9qNc0FdspMKzRH7ZNfzhdVVumVawgfxqLM7bBik7bLA7OryZxa77e5WkL6SuaLrmUMba3nFElxNfxFKBKh%252BRsoNu1If30Q%253D%253D%26Expires%3D1788946870&amp;app=com.google.Chrome&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=1"></script><script type="text/javascript" nonce="8aed6a628ed3488b96ea2cd77a9" src="//local.adguard.org?ts=1788941434992&amp;name=AdGuard%20Extra&amp;name=AdGuard%20Assistant&amp;type=user-script"></script></head>
+
+<body>
+  <main class="page">
+    <section class="panel" aria-labelledby="videoTitle">
+      <h1 id="videoTitle">Interactive YouTube Video</h1>
+      <p class="help">Paste a YouTube link, choose Student mode when ready, and answer each question correctly to continue watching.</p>
+
+      <div class="control-row">
+        <input id="youtubeUrl" type="url" placeholder="Paste a YouTube link" aria-label="YouTube URL" />
+        <button id="loadVideoButton" type="button">Load video</button>
+      </div>
+
+      <p id="videoMessage" class="message" role="alert" aria-live="polite"></p>
+
+      <div class="video-wrap">
+        <div id="player"></div>
+      </div>
+
+      <div class="open-row" id="openRow" hidden>
+        <a id="openYouTube" class="open-link" href="#" target="_blank" rel="noopener noreferrer">Open on YouTube</a>
+        <span class="note">Use this if the video owner does not allow embedding.</span>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="quizTitle">
+      <h2 id="quizTitle">Video Quiz</h2>
+
+      <div class="mode-bar">
+        <button id="teacherModeButton" class="mode-button active" type="button">Teacher setup</button>
+        <button id="studentModeButton" class="mode-button" type="button">Student mode</button>
+      </div>
+
+      <div id="teacherView" class="teacher-view">
+        <p class="help">Enter the number of questions, then write a pause time, question, four choices, and the correct answer for each question. Times use <strong>mm:ss</strong>, for example <code>01:30</code>.</p>
+
+        <div class="teacher-toolbar">
+          <div>
+            <label for="questionCount">Number of questions</label>
+            <input id="questionCount" type="number" min="1" max="20" value="3" />
+          </div>
+          <button id="generateQuestionsButton" type="button">Create question form</button>
+        </div>
+
+        <div id="questionList" class="question-list"></div>
+        <p id="teacherMessage" class="message" role="alert" aria-live="polite"></p>
+        <div class="control-row">
+          <button id="saveQuestionsButton" type="button">Save questions</button>
+          <button id="clearQuestionsButton" class="secondary" type="button">Clear saved questions</button>
+        </div>
+        <p class="note">Questions are saved only in this browser on this device. They are not uploaded anywhere.</p>
+      </div>
+
+      <div id="studentView" class="student-view" hidden>
+        <div id="studentProgress" class="progress">No quiz loaded.</div>
+        <div id="studentQuestion" class="student-question" hidden>
+          <div id="questionStatus" class="question-status"></div>
+          <p id="studentQuestionText" class="student-question-text"></p>
+          <div id="answerChoices" class="answers"></div>
+          <p id="answerFeedback" class="feedback" role="alert" aria-live="polite"></p>
+        </div>
+        <div id="studentEmpty" class="empty">Switch to Teacher setup, create questions, complete all fields, then select Save questions. Return here before students begin the video.</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script>
+    const STORAGE_KEY = "interactiveYouTubeQuizQuestionsV1";
+    const letters = ["A", "B", "C", "D"];
+
+    const youtubeUrlInput = document.getElementById("youtubeUrl");
+    const loadVideoButton = document.getElementById("loadVideoButton");
+    const videoMessage = document.getElementById("videoMessage");
+    const openRow = document.getElementById("openRow");
+    const openYouTube = document.getElementById("openYouTube");
+
+    const teacherModeButton = document.getElementById("teacherModeButton");
+    const studentModeButton = document.getElementById("studentModeButton");
+    const teacherView = document.getElementById("teacherView");
+    const studentView = document.getElementById("studentView");
+    const questionCount = document.getElementById("questionCount");
+    const generateQuestionsButton = document.getElementById("generateQuestionsButton");
+    const questionList = document.getElementById("questionList");
+    const saveQuestionsButton = document.getElementById("saveQuestionsButton");
+    const clearQuestionsButton = document.getElementById("clearQuestionsButton");
+    const teacherMessage = document.getElementById("teacherMessage");
+
+    const studentProgress = document.getElementById("studentProgress");
+    const studentQuestion = document.getElementById("studentQuestion");
+    const questionStatus = document.getElementById("questionStatus");
+    const studentQuestionText = document.getElementById("studentQuestionText");
+    const answerChoices = document.getElementById("answerChoices");
+    const answerFeedback = document.getElementById("answerFeedback");
+    const studentEmpty = document.getElementById("studentEmpty");
+
+    let player;
+    let playerReady = false;
+    let timeWatcher = null;
+    let activeMode = "teacher";
+    let quizQuestions = [];
+    let nextQuestionIndex = 0;
+    let activeQuestionIndex = null;
+    let quizStarted = false;
+    let isQuestionLocked = false;
+    let lastLoadedVideoId = null;
+
+    function getVideoId(value) {
+      const text = value.trim();
+      if (!text) return null;
+
+      let url;
+      try {
+        url = new URL(text);
+      } catch {
+        return null;
+      }
+
+      const host = url.hostname.toLowerCase().replace(/^www\./, "");
+      let id = null;
+
+      if (host === "youtu.be") {
+        id = url.pathname.split("/").filter(Boolean)[0];
+      } else if (host === "youtube.com" || host === "m.youtube.com") {
+        if (url.pathname === "/watch") {
+          id = url.searchParams.get("v");
+        } else {
+          const path = url.pathname.split("/").filter(Boolean);
+          if (["embed", "shorts", "live", "v"].includes(path[0])) id = path[1];
+        }
+      }
+
+      return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+    }
+
+    function parseTime(value) {
+      const text = String(value).trim();
+      if (!text) return null;
+
+      if (/^\d+(\.\d+)?$/.test(text)) {
+        return Number(text);
+      }
+
+      const parts = text.split(":");
+      if (parts.length !== 2 || !parts.every(part => /^\d+$/.test(part))) return null;
+      const minutes = Number(parts[0]);
+      const seconds = Number(parts[1]);
+      if (seconds > 59) return null;
+      return minutes * 60 + seconds;
+    }
+
+    function formatTime(seconds) {
+      const safeSeconds = Math.max(0, Math.floor(seconds));
+      const minutes = Math.floor(safeSeconds / 60);
+      const remaining = safeSeconds % 60;
+      return `${String(minutes).padStart(2, "0")}:${String(remaining).padStart(2, "0")}`;
+    }
+
+    function setVideoMessage(text) {
+      videoMessage.textContent = text;
+    }
+
+    function setTeacherMessage(text) {
+      teacherMessage.textContent = text;
+    }
+
+    function createQuestionEditor(index, question = {}) {
+      const editor = document.createElement("article");
+      editor.className = "question-editor";
+      editor.dataset.questionIndex = index;
+      const options = Array.isArray(question.options) ? question.options : ["", "", "", ""];
+      const correctAnswer = Number.isInteger(question.correctAnswer) ? question.correctAnswer : 0;
+
+      editor.innerHTML = `
+        <div class="question-editor-head">
+          <h3>Question ${index + 1}</h3>
+          <button class="danger small remove-question" type="button">Remove</button>
+        </div>
+        <div class="time-row">
+          <div>
+            <label class="field-label" for="time-${index}">Pause time</label>
+            <input id="time-${index}" class="question-time" type="text" placeholder="e.g. 01:30" value="${escapeHtml(question.timeText || (question.time !== undefined ? formatTime(question.time) : ""))}" />
+          </div>
+          <button class="secondary small use-current-time" type="button">Use video time</button>
+        </div>
+        <label class="field-label" for="question-${index}">Question</label>
+        <input id="question-${index}" class="question-text" type="text" placeholder="Write the multiple-choice question" value="${escapeHtml(question.question || "")}" />
+        ${options.map((option, optionIndex) => `
+          <div class="option-row">
+            <span class="option-letter">${letters[optionIndex]}</span>
+            <input class="option-text" type="text" placeholder="Option ${letters[optionIndex]}" value="${escapeHtml(option || "")}" />
+            <label class="answer-radio"><input class="correct-answer" type="radio" name="correct-${index}" value="${optionIndex}" ${correctAnswer === optionIndex ? "checked" : ""} /> Correct</label>
+          </div>
+        `).join("")}
+      `;
+
+      editor.querySelector(".remove-question").addEventListener("click", () => {
+        editor.remove();
+        renumberQuestionEditors();
+      });
+
+      editor.querySelector(".use-current-time").addEventListener("click", () => {
+        if (!playerReady || !player || typeof player.getCurrentTime !== "function") {
+          setTeacherMessage("Load a video first, then play or seek to the required moment before using this button.");
+          return;
+        }
+        editor.querySelector(".question-time").value = formatTime(player.getCurrentTime());
+        setTeacherMessage("");
+      });
+
+      return editor;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function renumberQuestionEditors() {
+      [...questionList.children].forEach((editor, index) => {
+        editor.dataset.questionIndex = index;
+        editor.querySelector("h3").textContent = `Question ${index + 1}`;
+        const time = editor.querySelector(".question-time");
+        const text = editor.querySelector(".question-text");
+        time.id = `time-${index}`;
+        text.id = `question-${index}`;
+        editor.querySelector("label[for^='time-']").htmlFor = `time-${index}`;
+        editor.querySelector("label[for^='question-']").htmlFor = `question-${index}`;
+        editor.querySelectorAll(".correct-answer").forEach(radio => radio.name = `correct-${index}`);
+      });
+      questionCount.value = Math.max(1, questionList.children.length || 1);
+    }
+
+    function renderQuestionEditors(questions) {
+      questionList.innerHTML = "";
+      questions.forEach((question, index) => questionList.appendChild(createQuestionEditor(index, question)));
+    }
+
+    function generateQuestionForms() {
+      const count = Math.min(20, Math.max(1, Number(questionCount.value) || 1));
+      questionCount.value = count;
+      const existing = readEditorData(false);
+      const questions = Array.from({ length: count }, (_, index) => existing[index] || {});
+      renderQuestionEditors(questions);
+      setTeacherMessage("");
+    }
+
+    function readEditorData(validate) {
+      const editors = [...questionList.querySelectorAll(".question-editor")];
+      const questions = [];
+
+      for (let index = 0; index < editors.length; index++) {
+        const editor = editors[index];
+        const timeText = editor.querySelector(".question-time").value.trim();
+        const time = parseTime(timeText);
+        const question = editor.querySelector(".question-text").value.trim();
+        const options = [...editor.querySelectorAll(".option-text")].map(input => input.value.trim());
+        const selected = editor.querySelector(".correct-answer:checked");
+        const correctAnswer = selected ? Number(selected.value) : null;
+
+        if (validate) {
+          if (time === null || time < 0) throw new Error(`Question ${index + 1}: enter a valid pause time such as 01:30.`);
+          if (!question) throw new Error(`Question ${index + 1}: enter a question.`);
+          if (options.some(option => !option)) throw new Error(`Question ${index + 1}: enter all four answer choices.`);
+          if (correctAnswer === null) throw new Error(`Question ${index + 1}: select the correct answer.`);
+        }
+
+        questions.push({ timeText, time, question, options, correctAnswer });
+      }
+
+      return questions;
+    }
+
+    function saveQuestions() {
+      try {
+        const questions = readEditorData(true)
+          .sort((a, b) => a.time - b.time)
+          .map(({ time, question, options, correctAnswer }) => ({ time, question, options, correctAnswer }));
+
+        if (!questions.length) throw new Error("Create at least one question first.");
+
+        for (let i = 1; i < questions.length; i++) {
+          if (questions[i].time <= questions[i - 1].time) {
+            throw new Error("Each pause time must be later than the previous question time.");
+          }
+        }
+
+        quizQuestions = questions;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(quizQuestions));
+        setTeacherMessage(`Saved ${quizQuestions.length} question${quizQuestions.length === 1 ? "" : "s"}. Switch to Student mode before starting the activity.`);
+        resetStudentQuiz();
+      } catch (error) {
+        setTeacherMessage(error.message);
+      }
+    }
+
+    function clearSavedQuestions() {
+      localStorage.removeItem(STORAGE_KEY);
+      quizQuestions = [];
+      questionList.innerHTML = "";
+      questionCount.value = 3;
+      setTeacherMessage("Saved questions cleared.");
+      resetStudentQuiz();
+    }
+
+    function loadSavedQuestions() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (Array.isArray(saved) && saved.length) {
+          quizQuestions = saved;
+          questionCount.value = saved.length;
+          renderQuestionEditors(saved.map(q => ({ ...q, timeText: formatTime(q.time) })));
+        } else {
+          generateQuestionForms();
+        }
+      } catch {
+        generateQuestionForms();
+      }
+    }
+
+    function setMode(mode) {
+      activeMode = mode;
+      const teacher = mode === "teacher";
+      teacherView.hidden = !teacher;
+      studentView.hidden = teacher;
+      teacherModeButton.classList.toggle("active", teacher);
+      studentModeButton.classList.toggle("active", !teacher);
+
+      if (teacher) {
+        stopTimeWatcher();
+        if (playerReady && player && typeof player.pauseVideo === "function") player.pauseVideo();
+      } else {
+        resetStudentQuiz();
+      }
+    }
+
+    function resetStudentQuiz() {
+      stopTimeWatcher();
+      nextQuestionIndex = 0;
+      activeQuestionIndex = null;
+      isQuestionLocked = false;
+      quizStarted = false;
+      studentQuestion.hidden = true;
+      answerFeedback.textContent = "";
+      answerFeedback.className = "feedback";
+      answerChoices.innerHTML = "";
+
+      if (!quizQuestions.length) {
+        studentProgress.textContent = "No quiz loaded.";
+        studentEmpty.hidden = false;
+      } else {
+        studentProgress.textContent = `Ready: ${quizQuestions.length} question${quizQuestions.length === 1 ? "" : "s"}. Press Play on the YouTube player to begin.`;
+        studentEmpty.hidden = true;
+      }
+    }
+
+    function startTimeWatcher() {
+      stopTimeWatcher();
+      if (activeMode !== "student" || !quizQuestions.length) return;
+      timeWatcher = window.setInterval(checkQuizTime, 250);
+    }
+
+    function stopTimeWatcher() {
+      if (timeWatcher !== null) {
+        clearInterval(timeWatcher);
+        timeWatcher = null;
+      }
+    }
+
+    function checkQuizTime() {
+      if (!playerReady || !player || isQuestionLocked || nextQuestionIndex >= quizQuestions.length) return;
+      if (typeof player.getPlayerState !== "function" || player.getPlayerState() !== YT.PlayerState.PLAYING) return;
+
+      const currentTime = player.getCurrentTime();
+      const nextQuestion = quizQuestions[nextQuestionIndex];
+      if (currentTime >= nextQuestion.time - 0.15) {
+        presentQuestion(nextQuestionIndex);
+      }
+    }
+
+    function presentQuestion(index) {
+      if (!playerReady || !player || isQuestionLocked) return;
+      isQuestionLocked = true;
+      activeQuestionIndex = index;
+      player.pauseVideo();
+
+      const question = quizQuestions[index];
+      questionStatus.textContent = `Question ${index + 1} of ${quizQuestions.length} · Video paused at ${formatTime(question.time)}`;
+      studentQuestionText.textContent = question.question;
+      answerFeedback.textContent = "";
+      answerFeedback.className = "feedback";
+      answerChoices.innerHTML = "";
+
+      question.options.forEach((option, optionIndex) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "answer-choice";
+        button.innerHTML = `<span class="letter">${letters[optionIndex]}.</span><span>${escapeHtml(option)}</span>`;
+        button.addEventListener("click", () => submitAnswer(optionIndex));
+        answerChoices.appendChild(button);
+      });
+
+      studentQuestion.hidden = false;
+      studentEmpty.hidden = true;
+      studentProgress.textContent = `Answer Question ${index + 1} correctly to continue the video.`;
+    }
+
+    function submitAnswer(selectedIndex) {
+      if (!isQuestionLocked || activeQuestionIndex === null) return;
+      const question = quizQuestions[activeQuestionIndex];
+
+      if (selectedIndex !== question.correctAnswer) {
+        answerFeedback.textContent = "Not correct yet. Try another answer—the video will remain paused.";
+        answerFeedback.className = "feedback error";
+        return;
+      }
+
+      answerFeedback.textContent = "Correct. Continuing the video...";
+      answerFeedback.className = "feedback success";
+      [...answerChoices.querySelectorAll("button")].forEach(button => button.disabled = true);
+
+      const answeredIndex = activeQuestionIndex;
+      nextQuestionIndex = answeredIndex + 1;
+      activeQuestionIndex = null;
+      isQuestionLocked = false;
+
+      window.setTimeout(() => {
+        studentQuestion.hidden = true;
+        if (nextQuestionIndex >= quizQuestions.length) {
+          studentProgress.textContent = "All questions completed. The video can continue to the end.";
+        } else {
+          studentProgress.textContent = `Correct. Next question: ${nextQuestionIndex + 1} of ${quizQuestions.length}.`;
+        }
+        if (playerReady && player && activeMode === "student") player.playVideo();
+      }, 650);
+    }
+
+    function loadVideo() {
+      const videoId = getVideoId(youtubeUrlInput.value);
+      if (!videoId) {
+        setVideoMessage("Please paste a valid YouTube video, Shorts, or youtu.be link.");
+        return;
+      }
+
+      setVideoMessage("");
+      openYouTube.href = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+      openRow.hidden = false;
+      lastLoadedVideoId = videoId;
+      resetStudentQuiz();
+
+      if (playerReady && player && typeof player.loadVideoById === "function") {
+        player.loadVideoById({ videoId, startSeconds: 0 });
+      } else {
+        createPlayer(videoId);
+      }
+    }
+
+    function createPlayer(videoId) {
+      player = new YT.Player("player", {
+        videoId,
+        playerVars: {
+          autoplay: 0,
+          rel: 0,
+          modestbranding: 1,
+          playsinline: 1,
+          origin: window.location.origin
+        },
+        events: {
+          onReady: event => {
+            playerReady = true;
+            event.target.pauseVideo();
+          },
+          onStateChange: event => {
+            if (activeMode !== "student") return;
+
+            if (event.data === YT.PlayerState.PLAYING) {
+              if (!quizQuestions.length) return;
+              quizStarted = true;
+              startTimeWatcher();
+              if (isQuestionLocked) event.target.pauseVideo();
+            }
+
+            if (event.data === YT.PlayerState.ENDED) {
+              stopTimeWatcher();
+              if (quizQuestions.length && nextQuestionIndex < quizQuestions.length) {
+                studentProgress.textContent = "The video ended before all questions were reached. Check the pause times in Teacher setup.";
+              }
+            }
+          },
+          onError: event => {
+            const codes = {
+              2: "Invalid YouTube video ID.",
+              5: "This video cannot be played in the HTML5 player.",
+              100: "This video was not found or is private.",
+              101: "The video owner does not allow this video to be embedded.",
+              150: "The video owner does not allow this video to be embedded.",
+              153: "YouTube did not receive a valid website identity. Open this page through its deployed HTTPS website, not as a local file."
+            };
+            setVideoMessage(codes[event.data] || `YouTube player error: ${event.data}`);
+          }
+        }
+      });
+    }
+
+    window.onYouTubeIframeAPIReady = () => {
+      if (lastLoadedVideoId) createPlayer(lastLoadedVideoId);
+    };
+
+    loadVideoButton.addEventListener("click", loadVideo);
+    youtubeUrlInput.addEventListener("keydown", event => {
+      if (event.key === "Enter") loadVideo();
+    });
+    generateQuestionsButton.addEventListener("click", generateQuestionForms);
+    saveQuestionsButton.addEventListener("click", saveQuestions);
+    clearQuestionsButton.addEventListener("click", clearSavedQuestions);
+    teacherModeButton.addEventListener("click", () => setMode("teacher"));
+    studentModeButton.addEventListener("click", () => setMode("student"));
+
+    loadSavedQuestions();
+    resetStudentQuiz();
+  </script>
+</body>
+</html>
