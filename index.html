@@ -207,7 +207,7 @@
       text-align: center;
     }
 
-    /* Responsive Stack for small screens */
+    /* Responsive Stack for mobile screens */
     @media (max-width: 900px) {
       .main-container {
         flex-direction: column;
@@ -234,7 +234,7 @@
       <div class="form-group">
         <label for="youtube-url">YouTube Link</label>
         <div style="display: flex; gap: 0.5rem;">
-          <input type="text" id="youtube-url" style="flex: 1;" placeholder="https://www.youtube.com/watch?v=..." />
+          <input type="text" id="youtube-url" style="flex: 1;" value="https://www.youtube.com/watch?v=7zJxMmfrVhI" placeholder="https://www.youtube.com/watch?v=..." />
           <button onclick="loadVideo()">Load Video</button>
         </div>
       </div>
@@ -252,7 +252,7 @@
       <div class="controls-row">
         <div class="form-group">
           <label for="question-count">Number of Questions</label>
-          <input type="number" id="question-count" value="3" min="1" max="10" />
+          <input type="number" id="question-count" value="4" min="1" max="10" />
         </div>
         <div class="form-group">
           <label for="api-key">Gemini API Key <small>(Optional)</small></label>
@@ -278,14 +278,60 @@
   <script>
     let currentQuizData = [];
 
-    // Helper: Extract YouTube Video ID from any standard link
+    // Preset questions database for specific YouTube Video IDs
+    const presetQuizzes = {
+      "7zJxMmfrVhI": [
+        {
+          question: "Why are timber logs continuously sprayed with water in the log yard?",
+          options: [
+            "To cool down the sawmill machinery",
+            "To maintain internal moisture and prevent splitting",
+            "To wash off dirt and insects before debarking",
+            "To soften the bark so it strips off faster"
+          ],
+          answerIndex: 1
+        },
+        {
+          question: "What is the main purpose of using 3D laser scanners before sawing the log?",
+          options: [
+            "To check for internal rot and mold",
+            "To measure dimensions and calculate the highest-yield cutting pattern",
+            "To automatically stamp the wood grade onto the log",
+            "To dry out the outer layers of the log"
+          ],
+          answerIndex: 1
+        },
+        {
+          question: "What does the Kiln Drying process achieve?",
+          options: [
+            "It cuts the central beam into rectangular boards",
+            "It lowers moisture content to ~15–19% to prevent structural warping and decay",
+            "It smooths all four sides of the board",
+            "It strips away any remaining tree bark"
+          ],
+          answerIndex: 1
+        },
+        {
+          question: "In the planing process, what does 'S4S' stand for?",
+          options: [
+            "Sawed 4 Times",
+            "Surfaced 4 Sides",
+            "Standard 4 Sizes",
+            "Structural Grade 4 Timber"
+          ],
+          answerIndex: 1
+        }
+      ]
+    };
+
+    // Extract YouTube Video ID from any standard link
     function getYouTubeVideoId(url) {
       const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
       const match = url.match(regExp);
       return (match && match[2].length === 11) ? match[2] : null;
     }
 
-    // Load YouTube video in the Left iframe
+    // Load YouTube video in the left iframe
     function loadVideo() {
       const url = document.getElementById('youtube-url').value.trim();
       const videoId = getYouTubeVideoId(url);
@@ -304,7 +350,7 @@
     // Generate Questions Logic
     async function generateQuestions() {
       const videoUrl = document.getElementById('youtube-url').value.trim();
-      const numQuestions = document.getElementById('question-count').value || 3;
+      const numQuestions = document.getElementById('question-count').value || 4;
       const apiKey = document.getElementById('api-key').value.trim();
       const videoId = getYouTubeVideoId(videoUrl);
 
@@ -344,33 +390,37 @@
           renderQuiz(currentQuizData);
         } catch (error) {
           console.error(error);
-          alert('Failed to generate with API Key. Falling back to demo generator mode.');
+          alert('Failed to generate with API Key. Falling back to preset mode.');
           generateDemoQuiz(videoId, numQuestions);
         }
       } else {
-        // Fallback Demo Quiz Generator when no API key is provided
+        // Preset / Fallback Mode
         setTimeout(() => {
           generateDemoQuiz(videoId, numQuestions);
-        }, 800);
+        }, 500);
       }
 
       loading.style.display = 'none';
     }
 
-    // Demo / Fallback Quiz Generator
+    // Demo / Preset Quiz Generator
     function generateDemoQuiz(videoId, count) {
-      currentQuizData = [];
-      for (let i = 1; i <= count; i++) {
-        currentQuizData.push({
-          question: `Question ${i}: What key point or concept is explained in segment ${i} of this video?`,
-          options: [
-            `Concept A (Correct Answer)`,
-            `Concept B`,
-            `Concept C`,
-            `Concept D`
-          ],
-          answerIndex: 0
-        });
+      if (presetQuizzes[videoId]) {
+        currentQuizData = presetQuizzes[videoId].slice(0, count);
+      } else {
+        currentQuizData = [];
+        for (let i = 1; i <= count; i++) {
+          currentQuizData.push({
+            question: `Question ${i}: What key point or concept is explained in segment ${i} of this video?`,
+            options: [
+              `Concept A (Correct Answer)`,
+              `Concept B`,
+              `Concept C`,
+              `Concept D`
+            ],
+            answerIndex: 0
+          });
+        }
       }
       renderQuiz(currentQuizData);
     }
@@ -427,6 +477,11 @@
       scoreBanner.innerText = `You scored ${score} out of ${currentQuizData.length}! 🎉`;
       scoreBanner.style.display = 'block';
     }
+
+    // Automatically load video on startup
+    window.onload = function() {
+      loadVideo();
+    };
   </script>
 </body>
 </html>
