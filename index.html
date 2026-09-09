@@ -1,859 +1,1413 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="referrer" content="strict-origin-when-cross-origin" />
-  <title>Interactive YouTube Video Quiz</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="referrer" content="strict-origin-when-cross-origin" />
+<title>YouTube 隨堂問答練習</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><rect width=%2224%22 height=%2224%22 rx=%226%22 fill=%22%2301696f%22/><path d=%22M9 7l8 5-8 5V7z%22 fill=%22white%22/></svg>" />
 
-  <style>
-    :root {
-      --page: #eef3f9;
-      --surface: #ffffff;
-      --surface-soft: #f7f9fc;
-      --text: #172033;
-      --muted: #61708a;
-      --border: #d8e0eb;
-      --primary: #2563eb;
-      --primary-hover: #1d4ed8;
-      --danger: #dc2626;
-      --success: #15803d;
-      --warning-bg: #fff7df;
-      --warning-border: #f4c95d;
-    }
+<!-- Fonts: Cabinet Grotesk (display) + General Sans (body) via Fontshare -->
+<link rel="preconnect" href="https://api.fontshare.com" />
+<link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700&f[]=general-sans@400,500,600&display=swap" rel="stylesheet" />
 
-    * { box-sizing: border-box; }
+<!-- YouTube IFrame API -->
+<script src="https://www.youtube.com/iframe_api"></script>
 
-    body {
-      margin: 0;
-      min-height: 100vh;
-      color: var(--text);
-      background: var(--page);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-    }
+<style>
+/* ============ base.css ============ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html {
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
+}
+body {
+  min-height: 100dvh;
+  line-height: 1.6;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--color-text);
+  background-color: var(--color-bg);
+}
+img, svg { display: block; max-width: 100%; height: auto; }
+input, button, textarea, select { font: inherit; color: inherit; }
+h1, h2, h3, h4 { text-wrap: balance; line-height: 1.15; }
+p, li { text-wrap: pretty; }
+::selection { background: oklch(from var(--color-primary) l c h / 0.25); }
+:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; border-radius: var(--radius-sm); }
+button { cursor: pointer; background: none; border: none; }
+a, button, input, select, [role="button"] {
+  transition: color var(--transition-interactive), background var(--transition-interactive),
+    border-color var(--transition-interactive), box-shadow var(--transition-interactive), transform var(--transition-interactive);
+}
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }
 
-    .page {
-      display: grid;
-      grid-template-columns: minmax(360px, 1.08fr) minmax(360px, 0.92fr);
-      gap: 16px;
-      min-height: 100vh;
-      padding: 16px;
-    }
+/* ============ tokens ============ */
+:root {
+  --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+  --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+  --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+  --text-2xl: clamp(2rem, 1.2rem + 2.5vw, 3rem);
 
-    .panel {
-      min-width: 0;
-      padding: 20px;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: var(--surface);
-      box-shadow: 0 3px 12px rgba(31, 45, 61, 0.06);
-    }
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
+  --space-5: 1.25rem; --space-6: 1.5rem; --space-8: 2rem; --space-10: 2.5rem;
+  --space-12: 3rem; --space-16: 4rem; --space-20: 5rem; --space-24: 6rem;
 
-    h1, h2, h3 { margin-top: 0; }
-    h1 { margin-bottom: 8px; font-size: 1.35rem; }
-    h2 { margin-bottom: 12px; font-size: 1.12rem; }
-    h3 { margin-bottom: 8px; font-size: 1rem; }
+  --radius-sm: 0.375rem; --radius-md: 0.5rem; --radius-lg: 0.75rem; --radius-xl: 1.25rem; --radius-full: 9999px;
+  --transition-interactive: 180ms cubic-bezier(0.16, 1, 0.3, 1);
 
-    .help, .note {
-      color: var(--muted);
-      font-size: 0.91rem;
-      line-height: 1.45;
-    }
+  --font-display: 'Cabinet Grotesk', 'General Sans', sans-serif;
+  --font-body: 'General Sans', 'Helvetica Neue', sans-serif;
+}
 
-    .help { margin: 0 0 16px; }
-    .note { margin: 10px 0 0; }
+:root, [data-theme="light"] {
+  --color-bg: #f7f6f2;
+  --color-surface: #ffffff;
+  --color-surface-2: #fbfbf9;
+  --color-surface-offset: #f0f2ef;
+  --color-divider: #dcd9d5;
+  --color-border: #d4d1ca;
 
-    .control-row {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 12px;
-    }
+  --color-text: #1d2523;
+  --color-text-muted: #656f6c;
+  --color-text-faint: #a8b0ad;
+  --color-text-inverse: #f9f8f4;
 
-    .control-row label {
-      flex: 0 0 auto;
-      font-weight: 650;
-      font-size: 0.92rem;
-    }
+  --color-primary: #01696f;
+  --color-primary-hover: #0c4e54;
+  --color-primary-active: #0f3638;
+  --color-primary-highlight: #cedcd8;
 
-    input, select, button, textarea {
-      font: inherit;
-    }
+  --color-success: #2f7d3a;
+  --color-success-highlight: #d9ecda;
+  --color-error: #a12c2c;
+  --color-error-highlight: #f3d9d9;
+  --color-gold: #b57d10;
+  --color-gold-highlight: #f0e2c2;
 
-    input[type="url"], input[type="text"], input[type="number"] {
-      width: 100%;
-      min-width: 0;
-      min-height: 43px;
-      padding: 10px 12px;
-      border: 1px solid #adb9cb;
-      border-radius: 8px;
-      color: var(--text);
-      background: #fff;
-    }
+  --shadow-sm: 0 1px 2px oklch(0.2 0.01 80 / 0.06);
+  --shadow-md: 0 6px 20px oklch(0.2 0.01 80 / 0.10);
+  --shadow-lg: 0 16px 40px oklch(0.2 0.01 80 / 0.16);
+}
 
-    input:focus, select:focus, button:focus-visible {
-      outline: 3px solid rgba(37, 99, 235, 0.22);
-      outline-offset: 1px;
-      border-color: var(--primary);
-    }
+[data-theme="dark"] {
+  --color-bg: #121917;
+  --color-surface: #182220;
+  --color-surface-2: #1c2624;
+  --color-surface-offset: #202b28;
+  --color-divider: #2a3532;
+  --color-border: #34413d;
 
-    button {
-      min-height: 42px;
-      padding: 9px 14px;
-      border: 0;
-      border-radius: 8px;
-      color: #fff;
-      background: var(--primary);
-      font-weight: 650;
-      cursor: pointer;
-    }
+  --color-text: #dfe6e3;
+  --color-text-muted: #93a19c;
+  --color-text-faint: #5c6864;
+  --color-text-inverse: #121917;
 
-    button:hover { background: var(--primary-hover); }
-    button.secondary { background: #52627a; }
-    button.secondary:hover { background: #3d4c62; }
-    button.danger { background: var(--danger); }
-    button.danger:hover { background: #b91c1c; }
-    button.small { min-height: 34px; padding: 6px 10px; font-size: 0.84rem; }
-    button:disabled { cursor: not-allowed; opacity: 0.55; }
+  --color-primary: #52a6ad;
+  --color-primary-hover: #6bb9bf;
+  --color-primary-active: #3c8188;
+  --color-primary-highlight: #24413f;
 
-    .message {
-      min-height: 22px;
-      margin: 4px 0 10px;
-      color: var(--danger);
-      font-size: 0.9rem;
-    }
+  --color-success: #6fbd77;
+  --color-success-highlight: #24382a;
+  --color-error: #d98080;
+  --color-error-highlight: #402525;
+  --color-gold: #e0b64f;
+  --color-gold-highlight: #3d3320;
 
-    .video-wrap {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      overflow: hidden;
-      border-radius: 10px;
-      background: #111827;
-    }
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow-md: 0 6px 20px oklch(0 0 0 / 0.32);
+  --shadow-lg: 0 16px 40px oklch(0 0 0 / 0.42);
+}
 
-    #player { width: 100%; height: 100%; }
+/* ============ layout ============ */
+header.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-surface);
+}
+.brand { display: flex; align-items: center; gap: var(--space-3); }
+.brand-mark {
+  width: 36px; height: 36px; border-radius: var(--radius-md);
+  background: var(--color-primary); display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-lg);
+  letter-spacing: -0.01em;
+}
+.brand-sub { font-size: var(--text-xs); color: var(--color-text-muted); }
 
-    .open-row {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      margin-top: 12px;
-    }
+.theme-toggle {
+  width: 40px; height: 40px; border-radius: var(--radius-full);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--color-text-muted); border: 1px solid var(--color-border);
+}
+.theme-toggle:hover { background: var(--color-surface-offset); color: var(--color-text); }
 
-    .open-link {
-      display: inline-flex;
-      min-height: 38px;
-      align-items: center;
-      justify-content: center;
-      padding: 8px 12px;
-      border-radius: 8px;
-      color: #fff;
-      background: #52627a;
-      font-size: 0.87rem;
-      font-weight: 650;
-      text-decoration: none;
-    }
+main {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6) var(--space-24);
+}
 
-    .mode-bar {
-      display: flex;
-      gap: 8px;
-      padding-bottom: 14px;
-      margin-bottom: 16px;
-      border-bottom: 1px solid var(--border);
-    }
+.page-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-xl);
+  margin-bottom: var(--space-2);
+}
+.page-desc {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-8);
+  max-width: 60ch;
+}
 
-    .mode-button { background: #e4eaf3; color: #34435a; }
-    .mode-button:hover { background: #d6dfec; }
-    .mode-button.active { color: #fff; background: var(--primary); }
+.workspace {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: var(--space-8);
+  align-items: start;
+}
+@media (max-width: 880px) {
+  .workspace { grid-template-columns: 1fr; }
+}
 
-    .teacher-toolbar {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: end;
-      margin-bottom: 14px;
-      padding: 14px;
-      border-radius: 10px;
-      background: var(--surface-soft);
-      border: 1px solid var(--border);
-    }
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
 
-    .teacher-toolbar label { display: block; margin-bottom: 6px; font-size: 0.9rem; font-weight: 650; }
-    .teacher-toolbar input { max-width: 160px; }
+.panel-header {
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--color-divider);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.panel-header h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-base);
+}
+.panel-body { padding: var(--space-6); }
 
-    .question-list { display: grid; gap: 14px; }
+/* left: setup + player */
+.field { margin-bottom: var(--space-5); }
+.field label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-2);
+}
+.field input[type="text"], .field input[type="url"], .field input[type="number"], .field textarea {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  font-size: var(--text-sm);
+  font-family: inherit;
+}
+.field textarea { resize: vertical; min-height: 5.5em; line-height: 1.5; }
+.field input[type="number"] { width: 100%; }
+.field input:focus-visible, .field textarea:focus-visible { border-color: var(--color-primary); }
 
-    .question-editor {
-      padding: 14px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      background: #fff;
-    }
+.row-2 { display: grid; grid-template-columns: 1fr auto; gap: var(--space-3); align-items: end; }
 
-    .question-editor-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 12px;
-    }
+.ai-generate-box {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  border: 1px dashed var(--color-border);
+  margin-bottom: var(--space-5);
+}
+.ai-generate-box .field { margin-bottom: var(--space-3); }
+#ai-generate-btn { white-space: nowrap; }
+#ai-status { margin-top: var(--space-2); margin-bottom: 0; min-height: 1.2em; }
+#ai-status.error { color: var(--color-danger, #c0392b); }
+#ai-status.ok { color: var(--color-primary); }
 
-    .question-editor-head h3 { margin: 0; }
+.setup-divider {
+  display: flex; align-items: center; gap: var(--space-3);
+  margin: var(--space-5) 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+.setup-divider::before, .setup-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--color-border);
+}
 
-    .field-label {
-      display: block;
-      margin: 10px 0 5px;
-      font-size: 0.85rem;
-      font-weight: 650;
-      color: #3f4f67;
-    }
+.question-bank { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+.bank-item {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+.bank-item .bank-index {
+  flex: 0 0 auto;
+  width: 1.6em; height: 1.6em;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+.bank-item .bank-question { flex: 1; font-size: var(--text-sm); }
+.bank-item .bank-remove {
+  flex: 0 0 auto;
+  background: none; border: none; color: var(--color-text-muted);
+  font-size: var(--text-lg); line-height: 1; padding: var(--space-1);
+}
+.bank-item .bank-remove:hover { color: var(--color-primary); }
 
-    .time-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--color-primary); color: var(--color-text-inverse); }
+.btn-primary:hover { background: var(--color-primary-hover); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost { background: var(--color-surface-offset); color: var(--color-text); border: 1px solid var(--color-border); }
+.btn-ghost:hover { background: var(--color-divider); }
+.btn-sm { padding: var(--space-2) var(--space-4); font-size: var(--text-xs); }
 
-    .option-row {
-      display: grid;
-      grid-template-columns: 30px 1fr 54px;
-      gap: 8px;
-      align-items: center;
-      margin-top: 8px;
-    }
+.player-shell {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+#player { width: 100%; height: 100%; }
 
-    .option-letter {
-      display: inline-grid;
-      place-items: center;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      color: #fff;
-      background: #60718a;
-      font-size: 0.82rem;
-      font-weight: 700;
-    }
+.player-placeholder {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--space-3);
+  color: #9aa8a5;
+  background: linear-gradient(160deg, #0d1413, #1a2422);
+  text-align: center;
+  padding: var(--space-6);
+}
+.player-placeholder svg { opacity: 0.5; }
+.player-placeholder p { font-size: var(--text-sm); max-width: 32ch; }
 
-    .answer-radio { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; color: #4a5970; }
+.player-error {
+  position: absolute; inset: 0;
+  display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--space-3);
+  background: linear-gradient(160deg, #0d1413, #1a2422);
+  text-align: center;
+  padding: var(--space-6);
+}
+.player-error.active { display: flex; }
+.player-error p { color: #d8c2c2; font-size: var(--text-sm); max-width: 34ch; }
+.watch-link { color: var(--color-primary); font-weight: 600; text-decoration: none; margin-left: auto; }
+.watch-link:hover { text-decoration: underline; }
 
-    .student-intro {
-      padding: 13px;
-      margin-bottom: 14px;
-      border: 1px solid var(--warning-border);
-      border-radius: 10px;
-      background: var(--warning-bg);
-      color: #6b4d00;
-      font-size: 0.91rem;
-      line-height: 1.45;
-    }
+.lock-overlay {
+  position: absolute; inset: 0;
+  background: oklch(0.15 0.02 200 / 0.72);
+  backdrop-filter: blur(2px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: var(--space-3);
+  color: #fff;
+  text-align: center;
+  padding: var(--space-6);
+}
+.lock-overlay.active { display: flex; }
+.lock-overlay p { font-size: var(--text-sm); color: #dbe3e1; max-width: 30ch; }
 
-    .student-question {
-      padding: 16px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      background: var(--surface-soft);
-    }
+.status-strip {
+  margin-top: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-text-faint); flex-shrink: 0; }
+.dot.live { background: var(--color-success); }
+.dot.paused { background: var(--color-gold); }
 
-    .student-question[hidden], .teacher-view[hidden], .student-view[hidden] { display: none; }
+/* right: quiz builder + quiz play */
+.quiz-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--color-surface-offset);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-5);
+}
+.quiz-tab {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.quiz-tab.active { background: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-sm); }
 
-    .question-status {
-      margin-bottom: 8px;
-      color: var(--muted);
-      font-size: 0.85rem;
-      font-weight: 650;
-    }
+.option-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.option-letter {
+  width: 28px; height: 28px; border-radius: var(--radius-full);
+  border: 1.5px solid var(--color-border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--text-xs); font-weight: 700; color: var(--color-text-muted);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: var(--transition-interactive);
+}
+.option-letter.correct-flag { border-color: var(--color-success); background: var(--color-success-highlight); color: var(--color-success); }
+.option-row input[type="text"] {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  font-size: var(--text-sm);
+}
+.hint-text { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: var(--space-1); margin-bottom: var(--space-5); }
 
-    .student-question-text {
-      margin: 0 0 14px;
-      font-size: 1.04rem;
-      font-weight: 650;
-      line-height: 1.45;
-    }
+.divider-label {
+  display: flex; align-items: center; gap: var(--space-3);
+  font-size: var(--text-xs); color: var(--color-text-faint);
+  margin: var(--space-6) 0;
+}
+.divider-label::before, .divider-label::after { content: ""; flex: 1; height: 1px; background: var(--color-divider); }
 
-    .answers { display: grid; gap: 9px; }
+/* quiz play card */
+.quiz-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-16) var(--space-6);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+.quiz-empty svg { opacity: 0.4; }
+.quiz-empty p { font-size: var(--text-sm); max-width: 30ch; }
 
-    .answer-choice {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      width: 100%;
-      min-height: 46px;
-      padding: 11px 12px;
-      border: 1px solid #b9c5d5;
-      border-radius: 8px;
-      color: var(--text);
-      background: #fff;
-      text-align: left;
-      font-weight: 500;
-    }
+.question-card { display: none; }
+.question-card.active { display: block; }
+.question-badge {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-primary-highlight);
+  color: var(--color-primary);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  margin-bottom: var(--space-4);
+}
+.question-text {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-6);
+}
+.choice-btn {
+  display: flex; align-items: center; gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  text-align: left;
+  font-size: var(--text-sm);
+}
+.choice-btn:hover:not(:disabled) { border-color: var(--color-primary); background: var(--color-primary-highlight); }
+.choice-btn:disabled { cursor: default; }
+.choice-btn .letter {
+  width: 26px; height: 26px; border-radius: var(--radius-full);
+  border: 1.5px solid var(--color-border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--text-xs); font-weight: 700; flex-shrink: 0;
+}
+.choice-btn.is-correct { border-color: var(--color-success); background: var(--color-success-highlight); }
+.choice-btn.is-correct .letter { border-color: var(--color-success); background: var(--color-success); color: #fff; }
+.choice-btn.is-wrong { border-color: var(--color-error); background: var(--color-error-highlight); }
+.choice-btn.is-wrong .letter { border-color: var(--color-error); background: var(--color-error); color: #fff; }
 
-    .answer-choice:hover { border-color: var(--primary); background: #f4f8ff; }
-    .answer-choice .letter { font-weight: 750; color: var(--primary); }
+.feedback {
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin-top: var(--space-2);
+}
+.feedback.show { display: flex; }
+.feedback.ok { background: var(--color-success-highlight); color: var(--color-success); }
+.feedback.no { background: var(--color-error-highlight); color: var(--color-error); }
 
-    .feedback {
-      min-height: 24px;
-      margin: 13px 0 0;
-      font-size: 0.92rem;
-      font-weight: 650;
-    }
+.resume-btn { margin-top: var(--space-4); width: 100%; }
 
-    .feedback.error { color: var(--danger); }
-    .feedback.success { color: var(--success); }
-
-    .progress {
-      padding: 11px 12px;
-      margin-bottom: 12px;
-      border-radius: 8px;
-      background: #eaf1ff;
-      color: #264b8e;
-      font-size: 0.9rem;
-      font-weight: 650;
-    }
-
-    .empty {
-      padding: 16px;
-      border: 1px dashed #b8c5d6;
-      border-radius: 10px;
-      color: var(--muted);
-      background: var(--surface-soft);
-      line-height: 1.45;
-    }
-
-    @media (max-width: 940px) {
-      .page { grid-template-columns: 1fr; }
-    }
-
-    @media (max-width: 560px) {
-      .page { gap: 10px; padding: 10px; }
-      .panel { padding: 15px; }
-      .control-row, .open-row { flex-direction: column; align-items: stretch; }
-      .teacher-toolbar { grid-template-columns: 1fr; }
-      .teacher-toolbar input { max-width: none; }
-      .control-row button, .open-link { width: 100%; }
-      .time-row { grid-template-columns: 1fr; }
-    }
-  </style>
-<script type="text/javascript" nonce="8aed6a628ed3488b96ea2cd77a9" src="//local.adguard.org?ts=1788941434992&amp;type=content-script&amp;dmn=ppl-ai-code-interpreter-files.s3.amazonaws.com&amp;url=https%3A%2F%2Fppl-ai-code-interpreter-files.s3.amazonaws.com%2Fask-engine%2Fdirect-files%2Fb1ccde86bf3613a14b9788f95660fca4%2F19a70230-a7b3-40a7-b512-037947fe8832%2Ffaa96152.html%3Fresponse-content-disposition%3Dattachment%253B%2520filename%253D%2522interactive_youtube_quiz.html%2522%253B%2520filename%252A%253DUTF-8%2527%2527interactive_youtube_quiz.html%26AWSAccessKeyId%3DASIA2F3EMEYERRZXGJVN%26Signature%3DAab25flRluBuDbX56FElHjczOjo%253D%26x-amz-security-token%3DIQoJb3JpZ2luX2VjEKH%252F%252F%252F%252F%252F%252F%252F%252F%252F%252FwEaCXVzLWVhc3QtMSJIMEYCIQC6e5mRJsLinPKH4q34AaqL5nbQvG0CN6Y5axGcDjtHdQIhAKDUtf3aD2EZf4CQhRyj6yRA4aupgLeoxMPjQSfLwKaJKvMECGoQARoMNjk5NzUzMzA5NzA1Igyu8QaUpd6NTc%252F6hwMq0AQlIvaMt0zgphZZM5O1XCiuBQGkZ9Q8xdHFCO7qM%252FtIl5Q53HWuIS8xzxLhl085vlOPpW%252FZgYNO1MU7zaSxBUcqkOedQgetJSSc49UmGht8X01bUucsA4v8TfwVvRR0WasG%252FQtWHpiu2PIRWHWWHLSshV45KxGuNS9VwrZH9D3wuky6QVwwdaGjHXnz84QlrkT6QL3ik4GG%252Bkce5DA0ET5JdbbGifqOkpl%252BjToU8aRGKkP%252FOh5AUQcHwiwFXNIA5MyBx2U7WRUhV0bB6Pg4QZMbjWQa%252Bc0ludaW%252BvrDdktIcppZbDHxINPfQXXnJCK%252Bxp47LQ0Jlx2gFAS3NkqcILvuJzxfthtB5fmyL1g9E4E5G48czFdP5m%252FeFQiX4oSkT1mkWyYwEKvIr5FiTZNstK16xpEt9IAs5IO8LuL8LknYam%252F9ERZtPBtND4pXYjpikIiBzaX6OsyPCIyRsCWJanQZ5COOyvOEFxJcHPt302ZETE%252BqArwdhR3fds%252Bz5h3RX6mcVa39aADpHiqikTsvAfOJ%252BJuCMAPmnCJgqFfvutFXfVld8%252BTeomcOaAS0BFmuKU7qR%252FpyO9h9Lr39fTsOuNfOaZ4xbQX4JztX8YJX%252FXgjssDFE%252BCT65N%252BDo%252FrCdjcuNytBaykQ5Ja1YUhon2BICW21Mcgg1edVlmABehTUNCi%252BJN2YuGFeeQNy88xILYm%252BvxzPicxtW07XrOlObw3QKDPtnomje6oBCUYxOemuKBlEgsebZtR6x75LUtrg%252BhIMUCBvGCeoNnJchzvHuAWT83dMIa%252FhNUGOpcBJ7d1CQ4jWwjz8fhawd2xKaj9OY%252BbnUFEYdJ9pRVTdUr6YYFfU%252F%252Bt%252BaYJl%252F0TwFS0k51ZRBRE%252Bk3p%252B79sW5pAxbFk1WnZVXAwLBTLMJFANm3c9qNc0FdspMKzRH7ZNfzhdVVumVawgfxqLM7bBik7bLA7OryZxa77e5WkL6SuaLrmUMba3nFElxNfxFKBKh%252BRsoNu1If30Q%253D%253D%26Expires%3D1788946870&amp;app=com.google.Chrome&amp;css=3&amp;js=1&amp;rel=1&amp;rji=1&amp;sbe=1"></script><script type="text/javascript" nonce="8aed6a628ed3488b96ea2cd77a9" src="//local.adguard.org?ts=1788941434992&amp;name=AdGuard%20Extra&amp;name=AdGuard%20Assistant&amp;type=user-script"></script></head>
-
+footer.site-footer {
+  text-align: center;
+  padding: var(--space-8) var(--space-6);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+</style>
+</head>
 <body>
-  <main class="page">
-    <section class="panel" aria-labelledby="videoTitle">
-      <h1 id="videoTitle">Interactive YouTube Video</h1>
-      <p class="help">Paste a YouTube link, choose Student mode when ready, and answer each question correctly to continue watching.</p>
 
-      <div class="control-row">
-        <input id="youtubeUrl" type="url" placeholder="Paste a YouTube link" aria-label="YouTube URL" />
-        <button id="loadVideoButton" type="button">Load video</button>
+<header class="site-header">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 7l8 5-8 5V7z" fill="white"/></svg>
+    </div>
+    <div>
+      <div class="brand-name">問答關卡</div>
+      <div class="brand-sub">YouTube 隨堂問答練習</div>
+    </div>
+  </div>
+  <button class="theme-toggle" data-theme-toggle aria-label="切換至深色模式">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
+</header>
+
+<main>
+  <h1 class="page-title">影片問答關卡</h1>
+  <p class="page-desc">貼上 YouTube 連結，設定一題四選一問題。學生要先答對，才能開始播放影片 —— 適合用作課前暖身或觀影前測驗。</p>
+
+  <div class="workspace">
+    <!-- LEFT: video -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>影片</h2>
       </div>
-
-      <p id="videoMessage" class="message" role="alert" aria-live="polite"></p>
-
-      <div class="video-wrap">
-        <div id="player"></div>
-      </div>
-
-      <div class="open-row" id="openRow" hidden>
-        <a id="openYouTube" class="open-link" href="#" target="_blank" rel="noopener noreferrer">Open on YouTube</a>
-        <span class="note">Use this if the video owner does not allow embedding.</span>
-      </div>
-    </section>
-
-    <section class="panel" aria-labelledby="quizTitle">
-      <h2 id="quizTitle">Video Quiz</h2>
-
-      <div class="mode-bar">
-        <button id="teacherModeButton" class="mode-button active" type="button">Teacher setup</button>
-        <button id="studentModeButton" class="mode-button" type="button">Student mode</button>
-      </div>
-
-      <div id="teacherView" class="teacher-view">
-        <p class="help">Enter the number of questions, then write a pause time, question, four choices, and the correct answer for each question. Times use <strong>mm:ss</strong>, for example <code>01:30</code>.</p>
-
-        <div class="teacher-toolbar">
-          <div>
-            <label for="questionCount">Number of questions</label>
-            <input id="questionCount" type="number" min="1" max="20" value="3" />
+      <div class="panel-body">
+        <div class="field">
+          <label for="yt-url">YouTube 連結</label>
+          <div class="row-2">
+            <input type="url" id="yt-url" placeholder="貼上 https://www.youtube.com/watch?v=..." autocomplete="off" />
+            <button class="btn btn-primary" id="load-video-btn">載入</button>
           </div>
-          <button id="generateQuestionsButton" type="button">Create question form</button>
         </div>
 
-        <div id="questionList" class="question-list"></div>
-        <p id="teacherMessage" class="message" role="alert" aria-live="polite"></p>
-        <div class="control-row">
-          <button id="saveQuestionsButton" type="button">Save questions</button>
-          <button id="clearQuestionsButton" class="secondary" type="button">Clear saved questions</button>
+        <div class="player-shell" id="player-shell">
+          <div class="player-placeholder" id="player-placeholder">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M10 9l5 3-5 3V9z" fill="currentColor" stroke="none"/></svg>
+            <p>貼上連結並按「載入」，影片會顯示在這裡</p>
+          </div>
+          <div class="player-error" id="player-error">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#e79b9b" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16v.1"/></svg>
+            <p id="player-error-text">這部影片無法在頁面內嵌入播放。</p>
+            <a id="watch-on-youtube" class="btn btn-ghost btn-sm" href="#" target="_blank" rel="noopener">在 YouTube 開啟觀看 ↗</a>
+          </div>
+          <div id="player" style="display:none;"></div>
+          <div class="lock-overlay" id="lock-overlay">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            <p>先完成右邊的問答，答對後即可繼續播放</p>
+          </div>
         </div>
-        <p class="note">Questions are saved only in this browser on this device. They are not uploaded anywhere.</p>
-      </div>
 
-      <div id="studentView" class="student-view" hidden>
-        <div id="studentProgress" class="progress">No quiz loaded.</div>
-        <div id="studentQuestion" class="student-question" hidden>
-          <div id="questionStatus" class="question-status"></div>
-          <p id="studentQuestionText" class="student-question-text"></p>
-          <div id="answerChoices" class="answers"></div>
-          <p id="answerFeedback" class="feedback" role="alert" aria-live="polite"></p>
+        <div class="status-strip">
+          <span class="dot" id="status-dot"></span>
+          <span id="status-text">尚未載入影片</span>
+          <a id="watch-on-youtube-inline" class="watch-link" href="#" target="_blank" rel="noopener" style="display:none;">在 YouTube 開啟 ↗</a>
         </div>
-        <div id="studentEmpty" class="empty">Switch to Teacher setup, create questions, complete all fields, then select Save questions. Return here before students begin the video.</div>
       </div>
     </section>
-  </main>
 
-  <script src="https://www.youtube.com/iframe_api"></script>
-  <script>
-    const STORAGE_KEY = "interactiveYouTubeQuizQuestionsV1";
-    const letters = ["A", "B", "C", "D"];
+    <!-- RIGHT: quiz -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>問答題設定</h2>
+      </div>
+      <div class="panel-body">
+        <div class="quiz-tabs" role="tablist">
+          <button class="quiz-tab active" id="tab-setup" role="tab" aria-selected="true">出題</button>
+          <button class="quiz-tab" id="tab-play" role="tab" aria-selected="false">作答</button>
+        </div>
 
-    const youtubeUrlInput = document.getElementById("youtubeUrl");
-    const loadVideoButton = document.getElementById("loadVideoButton");
-    const videoMessage = document.getElementById("videoMessage");
-    const openRow = document.getElementById("openRow");
-    const openYouTube = document.getElementById("openYouTube");
+        <!-- SETUP VIEW -->
+        <div id="setup-view">
+          <div class="ai-generate-box">
+            <div class="field">
+              <label for="ai-transcript">影片文字稿 或 內容重點（貼上後讓 AI 自動出題）</label>
+              <textarea id="ai-transcript" rows="5" placeholder="貼上字幕全文、影片摘要或重點段落……內容越完整，出題越準確。"></textarea>
+            </div>
+            <div class="row-2" style="align-items:end;">
+              <div class="field" style="margin-bottom:0;">
+                <label for="ai-count">題數</label>
+                <input type="number" id="ai-count" min="1" max="10" value="3" />
+              </div>
+              <button class="btn btn-primary" id="ai-generate-btn">✨ AI 自動出題</button>
+            </div>
+            <p class="hint-text" id="ai-status"></p>
+          </div>
 
-    const teacherModeButton = document.getElementById("teacherModeButton");
-    const studentModeButton = document.getElementById("studentModeButton");
-    const teacherView = document.getElementById("teacherView");
-    const studentView = document.getElementById("studentView");
-    const questionCount = document.getElementById("questionCount");
-    const generateQuestionsButton = document.getElementById("generateQuestionsButton");
-    const questionList = document.getElementById("questionList");
-    const saveQuestionsButton = document.getElementById("saveQuestionsButton");
-    const clearQuestionsButton = document.getElementById("clearQuestionsButton");
-    const teacherMessage = document.getElementById("teacherMessage");
+          <div class="setup-divider"><span>或手動新增一題</span></div>
 
-    const studentProgress = document.getElementById("studentProgress");
-    const studentQuestion = document.getElementById("studentQuestion");
-    const questionStatus = document.getElementById("questionStatus");
-    const studentQuestionText = document.getElementById("studentQuestionText");
-    const answerChoices = document.getElementById("answerChoices");
-    const answerFeedback = document.getElementById("answerFeedback");
-    const studentEmpty = document.getElementById("studentEmpty");
+          <div class="field">
+            <label for="q-text">題目（觀看影片前作答）</label>
+            <input type="text" id="q-text" placeholder="例如：這段影片主要介紹什麼？" />
+          </div>
 
-    let player;
-    let playerReady = false;
-    let timeWatcher = null;
-    let activeMode = "teacher";
-    let quizQuestions = [];
-    let nextQuestionIndex = 0;
-    let activeQuestionIndex = null;
-    let quizStarted = false;
-    let isQuestionLocked = false;
-    let lastLoadedVideoId = null;
+          <div class="field">
+            <label>四個選項（點左邊圓圈標示正確答案）</label>
+            <div class="option-row">
+              <div class="option-letter correct-flag" data-index="0">A</div>
+              <input type="text" data-opt="0" placeholder="選項 A" />
+            </div>
+            <div class="option-row">
+              <div class="option-letter" data-index="1">B</div>
+              <input type="text" data-opt="1" placeholder="選項 B" />
+            </div>
+            <div class="option-row">
+              <div class="option-letter" data-index="2">C</div>
+              <input type="text" data-opt="2" placeholder="選項 C" />
+            </div>
+            <div class="option-row">
+              <div class="option-letter" data-index="3">D</div>
+              <input type="text" data-opt="3" placeholder="選項 D" />
+            </div>
+            <p class="hint-text">目前正確答案：<strong id="correct-label">A</strong></p>
+          </div>
 
-    function getVideoId(value) {
-      const text = value.trim();
-      if (!text) return null;
+          <button class="btn btn-ghost" id="add-question-btn" style="width:100%;">+ 新增這一題到題目列表</button>
 
-      let url;
+          <div class="setup-divider"><span>題目列表</span></div>
+          <div id="question-bank" class="question-bank"></div>
+          <p class="hint-text" id="bank-empty-hint">尚未新增任何題目。</p>
+
+          <button class="btn btn-primary" id="save-quiz-btn" style="width:100%;">儲存題目並鎖定影片</button>
+        </div>
+
+        <!-- PLAY VIEW -->
+        <div id="play-view" style="display:none;">
+          <div class="quiz-empty" id="quiz-empty">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2 1.8-2 3.3M12 16.5v.1"/></svg>
+            <p>尚未設定題目。請切換到「出題」分頁先建立問題。</p>
+          </div>
+
+          <div class="question-card" id="question-card">
+            <div class="question-badge">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+              <span id="question-progress">作答後才能播放</span>
+            </div>
+            <div class="question-text" id="play-question-text"></div>
+            <div id="choices-container"></div>
+            <div class="feedback" id="feedback"></div>
+            <button class="btn btn-primary resume-btn" id="resume-btn" style="display:none;">下一題 ▶</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="site-footer">YouTube 隨堂問答練習 · 老師專用練習頁面</footer>
+
+<script>
+(function () {
+  // ---------- Theme toggle ----------
+  const toggle = document.querySelector('[data-theme-toggle]');
+  const root = document.documentElement;
+  let theme = matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
+  root.setAttribute('data-theme', theme);
+  toggle.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', theme);
+    toggle.setAttribute('aria-label', '切換至' + (theme === 'dark' ? '淺色' : '深色') + '模式');
+    toggle.innerHTML = theme === 'dark'
+      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  });
+
+  // ---------- State ----------
+  let ytPlayer = null;
+  let playerReady = false;
+  let pendingVideoId = null;
+  let questionBank = []; // draft list: { question, options: [4], correctIndex }
+  let quizList = [];     // locked/saved list used during play
+  let currentQuestionIdx = 0; // index into quizList during play
+  let answered = false;  // whether the CURRENT question has been answered correctly
+
+  const API = 'port/8000'.startsWith('__') ? 'http://localhost:8000' : 'port/8000';
+
+  const els = {
+    ytUrl: document.getElementById('yt-url'),
+    loadBtn: document.getElementById('load-video-btn'),
+    playerShell: document.getElementById('player-shell'),
+    placeholder: document.getElementById('player-placeholder'),
+    playerDiv: document.getElementById('player'),
+    lockOverlay: document.getElementById('lock-overlay'),
+    statusDot: document.getElementById('status-dot'),
+    statusText: document.getElementById('status-text'),
+
+    tabSetup: document.getElementById('tab-setup'),
+    tabPlay: document.getElementById('tab-play'),
+    setupView: document.getElementById('setup-view'),
+    playView: document.getElementById('play-view'),
+
+    aiTranscript: document.getElementById('ai-transcript'),
+    aiCount: document.getElementById('ai-count'),
+    aiGenerateBtn: document.getElementById('ai-generate-btn'),
+    aiStatus: document.getElementById('ai-status'),
+
+    qText: document.getElementById('q-text'),
+    optInputs: Array.from(document.querySelectorAll('[data-opt]')),
+    optLetters: Array.from(document.querySelectorAll('.option-letter')),
+    correctLabel: document.getElementById('correct-label'),
+    addQuestionBtn: document.getElementById('add-question-btn'),
+    saveQuizBtn: document.getElementById('save-quiz-btn'),
+    questionBankEl: document.getElementById('question-bank'),
+    bankEmptyHint: document.getElementById('bank-empty-hint'),
+
+    questionProgress: document.getElementById('question-progress'),
+    quizEmpty: document.getElementById('quiz-empty'),
+    questionCard: document.getElementById('question-card'),
+    playQuestionText: document.getElementById('play-question-text'),
+    choicesContainer: document.getElementById('choices-container'),
+    feedback: document.getElementById('feedback'),
+    resumeBtn: document.getElementById('resume-btn'),
+
+    playerError: document.getElementById('player-error'),
+    playerErrorText: document.getElementById('player-error-text'),
+    watchLink: document.getElementById('watch-on-youtube'),
+    watchLinkInline: document.getElementById('watch-on-youtube-inline'),
+  };
+
+  let currentVideoId = null;
+
+  let correctIndex = 0;
+
+  // ---------- Extract video ID ----------
+  function extractVideoId(url) {
+    if (!url) return null;
+    url = url.trim();
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+    ];
+    for (const p of patterns) {
+      const m = url.match(p);
+      if (m) return m[1];
+    }
+    // fallback: bare 11-char ID
+    if (/^[a-zA-Z0-9_-]{11}$/.test(url)) return url;
+    return null;
+  }
+
+  function setStatus(text, state) {
+    els.statusText.textContent = text;
+    els.statusDot.className = 'dot' + (state ? ' ' + state : '');
+  }
+
+  function showWatchLink(videoId) {
+    const url = 'https://www.youtube.com/watch?v=' + videoId;
+    els.watchLink.href = url;
+    els.watchLinkInline.href = url;
+    els.watchLinkInline.style.display = 'inline';
+  }
+
+  const YT_ERROR_MESSAGES = {
+    2: '影片連結無效，請確認網址是否正確。',
+    5: '這部影片無法用目前的播放器播放。',
+    100: '找不到這部影片，可能已被移除或設為不公開。',
+    101: '影片擁有者不允許在其他網站嵌入播放。',
+    150: '影片擁有者不允許在其他網站嵌入播放。',
+    153: '播放器設定錯誤（153），請儲存頁面後重新整頁重載一次，若仍發生請改用下方連結觀看。',
+  };
+
+  function showPlayerError(code) {
+    els.placeholder.style.display = 'none';
+    els.playerDiv.style.display = 'none';
+    els.playerError.classList.add('active');
+    els.playerErrorText.textContent = YT_ERROR_MESSAGES[code] || '影片載入時發生問題，請改用下方連結觀看。';
+    if (currentVideoId) showWatchLink(currentVideoId);
+    setStatus('影片載入失敗', undefined);
+  }
+
+  function hidePlayerError() {
+    els.playerError.classList.remove('active');
+  }
+
+  // ---------- YouTube API ----------
+  window.onYouTubeIframeAPIReady = function () {
+    if (pendingVideoId) {
+      createPlayer(pendingVideoId);
+      pendingVideoId = null;
+    }
+  };
+
+  function createPlayer(videoId) {
+    currentVideoId = videoId;
+    hidePlayerError();
+    els.watchLinkInline.style.display = 'none';
+    els.placeholder.style.display = 'none';
+    els.playerDiv.style.display = 'block';
+
+    clearTimeout(window.__ytReadyTimeout);
+    window.__ytReadyTimeout = setTimeout(function () {
+      if (!playerReady) {
+        showPlayerError(null);
+        els.playerErrorText.textContent = '影片一直沒有成功載入，可能是網路問題，或 YouTube 目前需要額外驗證。可以先用下方連結直接觀看。';
+      }
+    }, 8000);
+
+    if (ytPlayer) {
+      ytPlayer.loadVideoById(videoId);
+      return;
+    }
+
+    ytPlayer = new YT.Player('player', {
+      videoId: videoId,
+      playerVars: { rel: 0, modestbranding: 1, origin: window.location.origin },
+      events: {
+        onReady: function () {
+          playerReady = true;
+          clearTimeout(window.__ytReadyTimeout);
+          hidePlayerError();
+          applyLockState();
+          setStatus('影片已載入', 'paused');
+        },
+        onStateChange: function (e) {
+          if (e.data === YT.PlayerState.PLAYING) setStatus('播放中', 'live');
+          else if (e.data === YT.PlayerState.PAUSED) setStatus('已暫停', 'paused');
+          else if (e.data === YT.PlayerState.ENDED) setStatus('播放完畢', 'paused');
+        },
+        onError: function (e) {
+          showPlayerError(e.data);
+        },
+      },
+    });
+  }
+
+  function applyLockState() {
+    if (!playerReady) return;
+    const shouldLock = quizList.length > 0 && currentQuestionIdx < quizList.length;
+    els.lockOverlay.classList.toggle('active', shouldLock);
+    if (shouldLock) {
+      try { ytPlayer.pauseVideo(); } catch (e) {}
+    }
+  }
+
+  els.loadBtn.addEventListener('click', () => {
+    const id = extractVideoId(els.ytUrl.value);
+    if (!id) {
+      setStatus('連結格式看起來不正確，請確認後再試', undefined);
+      els.ytUrl.focus();
+      return;
+    }
+    playerReady = false;
+    currentVideoId = id;
+    hidePlayerError();
+    els.watchLinkInline.style.display = 'none';
+    if (window.YT && window.YT.Player) {
+      createPlayer(id);
+    } else {
+      pendingVideoId = id;
+      setStatus('正在準備播放器…', undefined);
+    }
+    // if a quiz already exists, reset play progress for the new video
+    if (quizList.length) {
+      resetPlayProgress();
+      renderPlayView();
+    }
+  });
+
+  els.ytUrl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') els.loadBtn.click();
+  });
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ---------- Question bank (draft list before locking) ----------
+  function renderQuestionBank() {
+    els.questionBankEl.innerHTML = '';
+    els.bankEmptyHint.style.display = questionBank.length ? 'none' : 'block';
+    questionBank.forEach((q, idx) => {
+      const row = document.createElement('div');
+      row.className = 'bank-item';
+      row.innerHTML =
+        '<span class="bank-index">' + (idx + 1) + '</span>' +
+        '<span class="bank-question">' + escapeHtml(q.question) + '</span>' +
+        '<button type="button" class="bank-remove" aria-label="刪除這題">×</button>';
+      row.querySelector('.bank-remove').addEventListener('click', () => {
+        questionBank.splice(idx, 1);
+        renderQuestionBank();
+      });
+      els.questionBankEl.appendChild(row);
+    });
+  }
+
+  function resetManualForm() {
+    els.qText.value = '';
+    els.optInputs.forEach((i) => (i.value = ''));
+    correctIndex = 0;
+    els.optLetters.forEach((o) => o.classList.remove('correct-flag'));
+    els.optLetters[0].classList.add('correct-flag');
+    els.correctLabel.textContent = 'A';
+  }
+
+  // ---------- Quiz setup: manual entry ----------
+  els.optLetters.forEach((el) => {
+    el.addEventListener('click', () => {
+      correctIndex = parseInt(el.dataset.index, 10);
+      els.optLetters.forEach((o) => o.classList.remove('correct-flag'));
+      el.classList.add('correct-flag');
+      els.correctLabel.textContent = String.fromCharCode(65 + correctIndex);
+    });
+  });
+
+  els.addQuestionBtn.addEventListener('click', () => {
+    const question = els.qText.value.trim();
+    const options = els.optInputs.map((i) => i.value.trim());
+
+    if (!question) {
+      els.qText.focus();
+      setStatus('請先輸入題目', undefined);
+      return;
+    }
+    if (options.some((o) => !o)) {
+      const firstEmpty = els.optInputs.find((i) => !i.value.trim());
+      if (firstEmpty) firstEmpty.focus();
+      setStatus('請填寫所有四個選項', undefined);
+      return;
+    }
+
+    questionBank.push({ question, options: options.slice(), correctIndex });
+    renderQuestionBank();
+    resetManualForm();
+  });
+
+  els.saveQuizBtn.addEventListener('click', () => {
+    if (!questionBank.length) {
+      setStatus('請先新增至少一題（手動或 AI 自動出題）', undefined);
+      return;
+    }
+    quizList = questionBank.map((q) => ({ ...q }));
+    resetPlayProgress();
+    renderPlayView();
+    switchTab('play');
+    applyLockState();
+  });
+
+  // ---------- AI question generation ----------
+  function setAiStatus(text, kind) {
+    els.aiStatus.textContent = text;
+    els.aiStatus.className = 'hint-text' + (kind ? ' ' + kind : '');
+  }
+
+  els.aiGenerateBtn.addEventListener('click', async () => {
+    const transcript = els.aiTranscript.value.trim();
+    const count = Math.min(10, Math.max(1, parseInt(els.aiCount.value, 10) || 3));
+    els.aiCount.value = count;
+
+    if (transcript.length < 10) {
+      setAiStatus('請先貼上影片文字稿或重點內容（至少十個字）。', 'error');
+      els.aiTranscript.focus();
+      return;
+    }
+
+    els.aiGenerateBtn.disabled = true;
+    setAiStatus('AI 正在出題中……請稍候', undefined);
+
+    try {
+      const res = await fetch(API + '/api/generate-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript, count }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || '產生題目失敗');
+
+      const generated = (data.questions || []).map((q) => ({
+        question: q.question,
+        options: q.options.slice(),
+        correctIndex: q.correctIndex,
+      }));
+      if (!generated.length) throw new Error('AI 沒有產生任何題目');
+
+      questionBank = questionBank.concat(generated);
+      renderQuestionBank();
+      setAiStatus('✓ 已產生 ' + generated.length + ' 題，已加入下方題目列表。確認無誤後請點「儲存題目並鎖定影片」。', 'ok');
+    } catch (err) {
+      setAiStatus('✗ ' + (err.message || '產生題目時發生問題，請稍後再試。'), 'error');
+    } finally {
+      els.aiGenerateBtn.disabled = false;
+    }
+  });
+
+  // ---------- Tabs ----------
+  function switchTab(name) {
+    const isSetup = name === 'setup';
+    els.tabSetup.classList.toggle('active', isSetup);
+    els.tabPlay.classList.toggle('active', !isSetup);
+    els.tabSetup.setAttribute('aria-selected', String(isSetup));
+    els.tabPlay.setAttribute('aria-selected', String(!isSetup));
+    els.setupView.style.display = isSetup ? 'block' : 'none';
+    els.playView.style.display = isSetup ? 'none' : 'block';
+  }
+  els.tabSetup.addEventListener('click', () => switchTab('setup'));
+  els.tabPlay.addEventListener('click', () => switchTab('play'));
+
+  // ---------- Quiz play (sequential, pre-roll gate) ----------
+  function resetPlayProgress() {
+    currentQuestionIdx = 0;
+    answered = false;
+  }
+
+  function allQuestionsDone() {
+    return quizList.length > 0 && currentQuestionIdx >= quizList.length;
+  }
+
+  function renderPlayView() {
+    if (!quizList.length) {
+      els.quizEmpty.style.display = 'flex';
+      els.questionCard.classList.remove('active');
+      return;
+    }
+    els.quizEmpty.style.display = 'none';
+    els.questionCard.classList.add('active');
+
+    if (allQuestionsDone()) {
+      els.questionProgress.textContent = '已完成所有題目';
+      els.playQuestionText.textContent = '✓ 全部答對了！可以開始播放影片。';
+      els.choicesContainer.innerHTML = '';
+      els.feedback.className = 'feedback';
+      els.feedback.textContent = '';
+      els.resumeBtn.textContent = '開始播放影片 ▶';
+      els.resumeBtn.style.display = 'inline-flex';
+      return;
+    }
+
+    const q = quizList[currentQuestionIdx];
+    els.questionProgress.textContent = '第 ' + (currentQuestionIdx + 1) + ' / ' + quizList.length + ' 題，作答後才能繼續';
+    els.playQuestionText.textContent = q.question;
+    els.feedback.className = 'feedback';
+    els.feedback.textContent = '';
+    els.resumeBtn.style.display = 'none';
+
+    els.choicesContainer.innerHTML = '';
+    q.options.forEach((opt, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'choice-btn';
+      btn.innerHTML = '<span class="letter">' + String.fromCharCode(65 + idx) + '</span><span>' + escapeHtml(opt) + '</span>';
+      btn.addEventListener('click', () => handleAnswer(idx, btn, q));
+      els.choicesContainer.appendChild(btn);
+    });
+  }
+
+  function handleAnswer(idx, btnEl, q) {
+    const allBtns = Array.from(els.choicesContainer.children);
+
+    if (idx === q.correctIndex) {
+      answered = true;
+      allBtns.forEach((b) => (b.disabled = true));
+      btnEl.classList.add('is-correct');
+      els.feedback.className = 'feedback show ok';
+      const isLast = currentQuestionIdx === quizList.length - 1;
+      els.feedback.textContent = isLast ? '✓ 答對了！已完成所有題目，可以播放影片。' : '✓ 答對了！請繼續下一題。';
+      els.resumeBtn.textContent = isLast ? '開始播放影片 ▶' : '下一題 ▶';
+      els.resumeBtn.style.display = 'inline-flex';
+    } else {
+      btnEl.classList.add('is-wrong');
+      btnEl.disabled = true;
+      els.feedback.className = 'feedback show no';
+      els.feedback.textContent = '✗ 答錯了，影片仍然暫停，請再選一次。';
+    }
+  }
+
+  els.resumeBtn.addEventListener('click', () => {
+    if (allQuestionsDone()) {
+      els.lockOverlay.classList.remove('active');
+      if (ytPlayer && playerReady) {
+        try { ytPlayer.playVideo(); } catch (e) {}
+      }
+      return;
+    }
+    // Guard: only advance if the CURRENT question has actually been answered
+    // correctly. Prevents a stray/duplicate click on a hidden resume button
+    // from skipping an unanswered question.
+    if (!answered) return;
+    currentQuestionIdx += 1;
+    answered = false;
+    if (allQuestionsDone()) {
+      applyLockState(); // unlock now that everything is answered
+    }
+    renderPlayView();
+  });
+
+  // init
+  renderQuestionBank();
+  setStatus('尚未載入影片', undefined);
+})();
+</script>
+
+<script data-pplx-inline-edit>
+(function () {
+  if (window === window.top) return;
+
+  const allowedParentOrigins = ["https://www.perplexity.ai","https://perplexity.ai","https://testing.perplexity.ai","https://staging.perplexity.ai","https://*.preview.i.perplexity.ai","http://perplexity.localhost","http://localhost:1420","http://127.0.0.1:1420","http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173","http://127.0.0.1:5173"];
+  const MAX_FONT_BYTES = 500 * 1024;
+  const MAX_TOTAL_FONT_BYTES = 2 * 1024 * 1024;
+  let scrollForwarding = false;
+  let scrollRaf = 0;
+  let trustedTopOrigin = null;
+
+  // Allow entries like "https://*.preview.i.perplexity.ai" — the wildcard
+  // matches a single DNS label (no dots), so "https://*.foo" cannot stretch
+  // across multiple labels.
+  function matchesAllowedOrigin(origin) {
+    if (!origin) return false;
+    for (const entry of allowedParentOrigins) {
+      if (!entry.includes("*")) {
+        if (entry === origin) return true;
+        continue;
+      }
+      const pattern = new RegExp(
+        "^" +
+          entry.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^.]+") +
+          "$",
+      );
+      if (pattern.test(origin)) return true;
+    }
+    return false;
+  }
+
+  // Trust decision: when the sender is same-origin-visible (event.origin is a
+  // real origin like https://www.perplexity.ai) we trust event.origin directly.
+  // When event.origin is "null" (opaque broker srcdoc), we fall back to the
+  // broker's stamped `parentOrigin` to identify the top window. The fallback
+  // is claim-only — we rely on the browser's native `targetOrigin` enforcement
+  // on the response path (see postToTrustedTop) to ensure replies can't be
+  // delivered to anyone but the actual top window of that claimed origin.
+  function getTrustedParentOrigin(event) {
+    const forwardedParentOrigin =
+      typeof event.data.parentOrigin === "string" ? event.data.parentOrigin : null;
+    const parentOrigin = event.origin === "null" ? forwardedParentOrigin : event.origin;
+    return matchesAllowedOrigin(parentOrigin) ? parentOrigin : null;
+  }
+
+  // All responses go to window.top with targetOrigin = the allowlisted origin.
+  // An attacker that iframes us inside their own null-origin broker can claim
+  // any parentOrigin they like, but the browser will drop the reply whenever
+  // the real top's origin doesn't match — so the screenshot never leaves.
+  function postToTrustedTop(message) {
+    if (!trustedTopOrigin) return;
+    try {
+      window.top.postMessage(message, trustedTopOrigin);
+    } catch (_error) {}
+  }
+
+  function inlineAll(original, clone) {
+    if (original.nodeType !== 1 || clone.nodeType !== 1) return;
+
+    try {
+      const computedStyle = getComputedStyle(original);
+      // cssText on a computed style is the serialized declaration in modern
+      // Chromium/Safari — a single read beats enumerating ~400 longhand
+      // properties. Firefox returns "" here, so we fall back on empty.
+      const serialized = computedStyle.cssText;
+      if (serialized) {
+        clone.style.cssText = serialized;
+      } else {
+        const parts = new Array(computedStyle.length);
+        for (let index = 0; index < computedStyle.length; index += 1) {
+          const property = computedStyle[index];
+          parts[index] = `${property}:${computedStyle.getPropertyValue(property)};`;
+        }
+        clone.style.cssText = parts.join("");
+      }
+    } catch (_error) {}
+
+    const originalChildren = original.children;
+    const clonedChildren = clone.children;
+    for (
+      let index = 0;
+      index < originalChildren.length && index < clonedChildren.length;
+      index += 1
+    ) {
+      inlineAll(originalChildren[index], clonedChildren[index]);
+    }
+  }
+
+  function extractFontUrl(srcValue) {
+    const matches = [
+      ...srcValue.matchAll(
+        /url\(["']?([^"')]+)["']?\)(?:\s*format\(["']?([^"')]+)["']?\))?/gi,
+      ),
+    ];
+    if (matches.length === 0) return null;
+    const woff2 = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff2"));
+    if (woff2) return woff2[1];
+    const woff = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff"));
+    if (woff) return woff[1];
+    return matches[0][1];
+  }
+
+  // Cache resolved font URL -> data URI across captures. Fonts on a page
+  // essentially never change, and a batch run emits multiple captures back to
+  // back — without this we'd refetch + re-base64 every time.
+  const fontDataUriCache = new Map();
+  const SRC_DECLARATION_RE = /src\s*:\s*[^;}]+/i;
+
+  async function fetchAsDataUri(url) {
+    if (fontDataUriCache.has(url)) return fontDataUriCache.get(url);
+    let dataUri = null;
+    try {
+      const response = await fetch(url, { mode: "cors", credentials: "omit" });
+      if (response.ok) {
+        const blob = await response.blob();
+        if (blob.size <= MAX_FONT_BYTES) {
+          dataUri = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () =>
+              resolve(typeof reader.result === "string" ? reader.result : null);
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        }
+      }
+    } catch (_error) {
+      dataUri = null;
+    }
+    fontDataUriCache.set(url, dataUri);
+    return dataUri;
+  }
+
+  function collectFontFaceRuleTexts() {
+    const rules = [];
+    for (const sheet of document.styleSheets) {
+      let cssRules;
       try {
-        url = new URL(text);
-      } catch {
+        cssRules = sheet.cssRules;
+      } catch (_error) {
+        continue;
+      }
+      if (!cssRules) continue;
+      for (const rule of cssRules) {
+        const cssText = rule.cssText || "";
+        if (cssText.startsWith("@font-face")) rules.push(cssText);
+      }
+    }
+    return rules;
+  }
+
+  async function buildInlinedFontCss() {
+    const ruleTexts = collectFontFaceRuleTexts();
+    if (ruleTexts.length === 0) return null;
+
+    const resolved = ruleTexts.map((cssText) => {
+      if (!SRC_DECLARATION_RE.test(cssText)) return null;
+      const srcMatch = cssText.match(/src\s*:\s*([^;}]+)[;}]/i);
+      if (!srcMatch) return null;
+      const url = extractFontUrl(srcMatch[1]);
+      if (!url) return null;
+      try {
+        return { cssText, url: new URL(url, document.baseURI).href };
+      } catch (_error) {
         return null;
       }
-
-      const host = url.hostname.toLowerCase().replace(/^www\./, "");
-      let id = null;
-
-      if (host === "youtu.be") {
-        id = url.pathname.split("/").filter(Boolean)[0];
-      } else if (host === "youtube.com" || host === "m.youtube.com") {
-        if (url.pathname === "/watch") {
-          id = url.searchParams.get("v");
-        } else {
-          const path = url.pathname.split("/").filter(Boolean);
-          if (["embed", "shorts", "live", "v"].includes(path[0])) id = path[1];
-        }
-      }
-
-      return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
-    }
-
-    function parseTime(value) {
-      const text = String(value).trim();
-      if (!text) return null;
-
-      if (/^\d+(\.\d+)?$/.test(text)) {
-        return Number(text);
-      }
-
-      const parts = text.split(":");
-      if (parts.length !== 2 || !parts.every(part => /^\d+$/.test(part))) return null;
-      const minutes = Number(parts[0]);
-      const seconds = Number(parts[1]);
-      if (seconds > 59) return null;
-      return minutes * 60 + seconds;
-    }
-
-    function formatTime(seconds) {
-      const safeSeconds = Math.max(0, Math.floor(seconds));
-      const minutes = Math.floor(safeSeconds / 60);
-      const remaining = safeSeconds % 60;
-      return `${String(minutes).padStart(2, "0")}:${String(remaining).padStart(2, "0")}`;
-    }
-
-    function setVideoMessage(text) {
-      videoMessage.textContent = text;
-    }
-
-    function setTeacherMessage(text) {
-      teacherMessage.textContent = text;
-    }
-
-    function createQuestionEditor(index, question = {}) {
-      const editor = document.createElement("article");
-      editor.className = "question-editor";
-      editor.dataset.questionIndex = index;
-      const options = Array.isArray(question.options) ? question.options : ["", "", "", ""];
-      const correctAnswer = Number.isInteger(question.correctAnswer) ? question.correctAnswer : 0;
-
-      editor.innerHTML = `
-        <div class="question-editor-head">
-          <h3>Question ${index + 1}</h3>
-          <button class="danger small remove-question" type="button">Remove</button>
-        </div>
-        <div class="time-row">
-          <div>
-            <label class="field-label" for="time-${index}">Pause time</label>
-            <input id="time-${index}" class="question-time" type="text" placeholder="e.g. 01:30" value="${escapeHtml(question.timeText || (question.time !== undefined ? formatTime(question.time) : ""))}" />
-          </div>
-          <button class="secondary small use-current-time" type="button">Use video time</button>
-        </div>
-        <label class="field-label" for="question-${index}">Question</label>
-        <input id="question-${index}" class="question-text" type="text" placeholder="Write the multiple-choice question" value="${escapeHtml(question.question || "")}" />
-        ${options.map((option, optionIndex) => `
-          <div class="option-row">
-            <span class="option-letter">${letters[optionIndex]}</span>
-            <input class="option-text" type="text" placeholder="Option ${letters[optionIndex]}" value="${escapeHtml(option || "")}" />
-            <label class="answer-radio"><input class="correct-answer" type="radio" name="correct-${index}" value="${optionIndex}" ${correctAnswer === optionIndex ? "checked" : ""} /> Correct</label>
-          </div>
-        `).join("")}
-      `;
-
-      editor.querySelector(".remove-question").addEventListener("click", () => {
-        editor.remove();
-        renumberQuestionEditors();
-      });
-
-      editor.querySelector(".use-current-time").addEventListener("click", () => {
-        if (!playerReady || !player || typeof player.getCurrentTime !== "function") {
-          setTeacherMessage("Load a video first, then play or seek to the required moment before using this button.");
-          return;
-        }
-        editor.querySelector(".question-time").value = formatTime(player.getCurrentTime());
-        setTeacherMessage("");
-      });
-
-      return editor;
-    }
-
-    function escapeHtml(value) {
-      return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-    }
-
-    function renumberQuestionEditors() {
-      [...questionList.children].forEach((editor, index) => {
-        editor.dataset.questionIndex = index;
-        editor.querySelector("h3").textContent = `Question ${index + 1}`;
-        const time = editor.querySelector(".question-time");
-        const text = editor.querySelector(".question-text");
-        time.id = `time-${index}`;
-        text.id = `question-${index}`;
-        editor.querySelector("label[for^='time-']").htmlFor = `time-${index}`;
-        editor.querySelector("label[for^='question-']").htmlFor = `question-${index}`;
-        editor.querySelectorAll(".correct-answer").forEach(radio => radio.name = `correct-${index}`);
-      });
-      questionCount.value = Math.max(1, questionList.children.length || 1);
-    }
-
-    function renderQuestionEditors(questions) {
-      questionList.innerHTML = "";
-      questions.forEach((question, index) => questionList.appendChild(createQuestionEditor(index, question)));
-    }
-
-    function generateQuestionForms() {
-      const count = Math.min(20, Math.max(1, Number(questionCount.value) || 1));
-      questionCount.value = count;
-      const existing = readEditorData(false);
-      const questions = Array.from({ length: count }, (_, index) => existing[index] || {});
-      renderQuestionEditors(questions);
-      setTeacherMessage("");
-    }
-
-    function readEditorData(validate) {
-      const editors = [...questionList.querySelectorAll(".question-editor")];
-      const questions = [];
-
-      for (let index = 0; index < editors.length; index++) {
-        const editor = editors[index];
-        const timeText = editor.querySelector(".question-time").value.trim();
-        const time = parseTime(timeText);
-        const question = editor.querySelector(".question-text").value.trim();
-        const options = [...editor.querySelectorAll(".option-text")].map(input => input.value.trim());
-        const selected = editor.querySelector(".correct-answer:checked");
-        const correctAnswer = selected ? Number(selected.value) : null;
-
-        if (validate) {
-          if (time === null || time < 0) throw new Error(`Question ${index + 1}: enter a valid pause time such as 01:30.`);
-          if (!question) throw new Error(`Question ${index + 1}: enter a question.`);
-          if (options.some(option => !option)) throw new Error(`Question ${index + 1}: enter all four answer choices.`);
-          if (correctAnswer === null) throw new Error(`Question ${index + 1}: select the correct answer.`);
-        }
-
-        questions.push({ timeText, time, question, options, correctAnswer });
-      }
-
-      return questions;
-    }
-
-    function saveQuestions() {
-      try {
-        const questions = readEditorData(true)
-          .sort((a, b) => a.time - b.time)
-          .map(({ time, question, options, correctAnswer }) => ({ time, question, options, correctAnswer }));
-
-        if (!questions.length) throw new Error("Create at least one question first.");
-
-        for (let i = 1; i < questions.length; i++) {
-          if (questions[i].time <= questions[i - 1].time) {
-            throw new Error("Each pause time must be later than the previous question time.");
-          }
-        }
-
-        quizQuestions = questions;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(quizQuestions));
-        setTeacherMessage(`Saved ${quizQuestions.length} question${quizQuestions.length === 1 ? "" : "s"}. Switch to Student mode before starting the activity.`);
-        resetStudentQuiz();
-      } catch (error) {
-        setTeacherMessage(error.message);
-      }
-    }
-
-    function clearSavedQuestions() {
-      localStorage.removeItem(STORAGE_KEY);
-      quizQuestions = [];
-      questionList.innerHTML = "";
-      questionCount.value = 3;
-      setTeacherMessage("Saved questions cleared.");
-      resetStudentQuiz();
-    }
-
-    function loadSavedQuestions() {
-      try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        if (Array.isArray(saved) && saved.length) {
-          quizQuestions = saved;
-          questionCount.value = saved.length;
-          renderQuestionEditors(saved.map(q => ({ ...q, timeText: formatTime(q.time) })));
-        } else {
-          generateQuestionForms();
-        }
-      } catch {
-        generateQuestionForms();
-      }
-    }
-
-    function setMode(mode) {
-      activeMode = mode;
-      const teacher = mode === "teacher";
-      teacherView.hidden = !teacher;
-      studentView.hidden = teacher;
-      teacherModeButton.classList.toggle("active", teacher);
-      studentModeButton.classList.toggle("active", !teacher);
-
-      if (teacher) {
-        stopTimeWatcher();
-        if (playerReady && player && typeof player.pauseVideo === "function") player.pauseVideo();
-      } else {
-        resetStudentQuiz();
-      }
-    }
-
-    function resetStudentQuiz() {
-      stopTimeWatcher();
-      nextQuestionIndex = 0;
-      activeQuestionIndex = null;
-      isQuestionLocked = false;
-      quizStarted = false;
-      studentQuestion.hidden = true;
-      answerFeedback.textContent = "";
-      answerFeedback.className = "feedback";
-      answerChoices.innerHTML = "";
-
-      if (!quizQuestions.length) {
-        studentProgress.textContent = "No quiz loaded.";
-        studentEmpty.hidden = false;
-      } else {
-        studentProgress.textContent = `Ready: ${quizQuestions.length} question${quizQuestions.length === 1 ? "" : "s"}. Press Play on the YouTube player to begin.`;
-        studentEmpty.hidden = true;
-      }
-    }
-
-    function startTimeWatcher() {
-      stopTimeWatcher();
-      if (activeMode !== "student" || !quizQuestions.length) return;
-      timeWatcher = window.setInterval(checkQuizTime, 250);
-    }
-
-    function stopTimeWatcher() {
-      if (timeWatcher !== null) {
-        clearInterval(timeWatcher);
-        timeWatcher = null;
-      }
-    }
-
-    function checkQuizTime() {
-      if (!playerReady || !player || isQuestionLocked || nextQuestionIndex >= quizQuestions.length) return;
-      if (typeof player.getPlayerState !== "function" || player.getPlayerState() !== YT.PlayerState.PLAYING) return;
-
-      const currentTime = player.getCurrentTime();
-      const nextQuestion = quizQuestions[nextQuestionIndex];
-      if (currentTime >= nextQuestion.time - 0.15) {
-        presentQuestion(nextQuestionIndex);
-      }
-    }
-
-    function presentQuestion(index) {
-      if (!playerReady || !player || isQuestionLocked) return;
-      isQuestionLocked = true;
-      activeQuestionIndex = index;
-      player.pauseVideo();
-
-      const question = quizQuestions[index];
-      questionStatus.textContent = `Question ${index + 1} of ${quizQuestions.length} · Video paused at ${formatTime(question.time)}`;
-      studentQuestionText.textContent = question.question;
-      answerFeedback.textContent = "";
-      answerFeedback.className = "feedback";
-      answerChoices.innerHTML = "";
-
-      question.options.forEach((option, optionIndex) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "answer-choice";
-        button.innerHTML = `<span class="letter">${letters[optionIndex]}.</span><span>${escapeHtml(option)}</span>`;
-        button.addEventListener("click", () => submitAnswer(optionIndex));
-        answerChoices.appendChild(button);
-      });
-
-      studentQuestion.hidden = false;
-      studentEmpty.hidden = true;
-      studentProgress.textContent = `Answer Question ${index + 1} correctly to continue the video.`;
-    }
-
-    function submitAnswer(selectedIndex) {
-      if (!isQuestionLocked || activeQuestionIndex === null) return;
-      const question = quizQuestions[activeQuestionIndex];
-
-      if (selectedIndex !== question.correctAnswer) {
-        answerFeedback.textContent = "Not correct yet. Try another answer—the video will remain paused.";
-        answerFeedback.className = "feedback error";
-        return;
-      }
-
-      answerFeedback.textContent = "Correct. Continuing the video...";
-      answerFeedback.className = "feedback success";
-      [...answerChoices.querySelectorAll("button")].forEach(button => button.disabled = true);
-
-      const answeredIndex = activeQuestionIndex;
-      nextQuestionIndex = answeredIndex + 1;
-      activeQuestionIndex = null;
-      isQuestionLocked = false;
-
-      window.setTimeout(() => {
-        studentQuestion.hidden = true;
-        if (nextQuestionIndex >= quizQuestions.length) {
-          studentProgress.textContent = "All questions completed. The video can continue to the end.";
-        } else {
-          studentProgress.textContent = `Correct. Next question: ${nextQuestionIndex + 1} of ${quizQuestions.length}.`;
-        }
-        if (playerReady && player && activeMode === "student") player.playVideo();
-      }, 650);
-    }
-
-    function loadVideo() {
-      const videoId = getVideoId(youtubeUrlInput.value);
-      if (!videoId) {
-        setVideoMessage("Please paste a valid YouTube video, Shorts, or youtu.be link.");
-        return;
-      }
-
-      setVideoMessage("");
-      openYouTube.href = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
-      openRow.hidden = false;
-      lastLoadedVideoId = videoId;
-      resetStudentQuiz();
-
-      if (playerReady && player && typeof player.loadVideoById === "function") {
-        player.loadVideoById({ videoId, startSeconds: 0 });
-      } else {
-        createPlayer(videoId);
-      }
-    }
-
-    function createPlayer(videoId) {
-      player = new YT.Player("player", {
-        videoId,
-        playerVars: {
-          autoplay: 0,
-          rel: 0,
-          modestbranding: 1,
-          playsinline: 1,
-          origin: window.location.origin
-        },
-        events: {
-          onReady: event => {
-            playerReady = true;
-            event.target.pauseVideo();
-          },
-          onStateChange: event => {
-            if (activeMode !== "student") return;
-
-            if (event.data === YT.PlayerState.PLAYING) {
-              if (!quizQuestions.length) return;
-              quizStarted = true;
-              startTimeWatcher();
-              if (isQuestionLocked) event.target.pauseVideo();
-            }
-
-            if (event.data === YT.PlayerState.ENDED) {
-              stopTimeWatcher();
-              if (quizQuestions.length && nextQuestionIndex < quizQuestions.length) {
-                studentProgress.textContent = "The video ended before all questions were reached. Check the pause times in Teacher setup.";
-              }
-            }
-          },
-          onError: event => {
-            const codes = {
-              2: "Invalid YouTube video ID.",
-              5: "This video cannot be played in the HTML5 player.",
-              100: "This video was not found or is private.",
-              101: "The video owner does not allow this video to be embedded.",
-              150: "The video owner does not allow this video to be embedded.",
-              153: "YouTube did not receive a valid website identity. Open this page through its deployed HTTPS website, not as a local file."
-            };
-            setVideoMessage(codes[event.data] || `YouTube player error: ${event.data}`);
-          }
-        }
-      });
-    }
-
-    window.onYouTubeIframeAPIReady = () => {
-      if (lastLoadedVideoId) createPlayer(lastLoadedVideoId);
-    };
-
-    loadVideoButton.addEventListener("click", loadVideo);
-    youtubeUrlInput.addEventListener("keydown", event => {
-      if (event.key === "Enter") loadVideo();
     });
-    generateQuestionsButton.addEventListener("click", generateQuestionForms);
-    saveQuestionsButton.addEventListener("click", saveQuestions);
-    clearQuestionsButton.addEventListener("click", clearSavedQuestions);
-    teacherModeButton.addEventListener("click", () => setMode("teacher"));
-    studentModeButton.addEventListener("click", () => setMode("student"));
 
-    loadSavedQuestions();
-    resetStudentQuiz();
-  </script>
-</body>
+    const dataUris = await Promise.all(
+      resolved.map((entry) => (entry ? fetchAsDataUri(entry.url) : Promise.resolve(null))),
+    );
+
+    const inlined = [];
+    let totalBytes = 0;
+    for (let index = 0; index < resolved.length; index += 1) {
+      const entry = resolved[index];
+      const dataUri = dataUris[index];
+      if (!entry || !dataUri) continue;
+      const approxBytes = dataUri.length * 0.75;
+      if (totalBytes + approxBytes > MAX_TOTAL_FONT_BYTES) break;
+      totalBytes += approxBytes;
+      inlined.push(entry.cssText.replace(SRC_DECLARATION_RE, `src: url("${dataUri}")`));
+    }
+    return inlined.length > 0 ? inlined.join("\n") : null;
+  }
+
+  function stripExternal(clone) {
+    const images = clone.querySelectorAll("img");
+    for (let index = 0; index < images.length; index += 1) {
+      const src = images[index].getAttribute("src");
+      if (src && !src.startsWith("data:")) images[index].removeAttribute("src");
+    }
+
+    const elements = clone.querySelectorAll("*");
+    for (let index = 0; index < elements.length; index += 1) {
+      const style = elements[index].style.cssText;
+      if (style && style.includes("url(")) {
+        elements[index].style.cssText = style.replace(
+          /url\(["']?(?!data:)[^)"']*["']?\)/gi,
+          "none",
+        );
+      }
+    }
+  }
+
+  function emitScroll() {
+    scrollRaf = 0;
+    if (!scrollForwarding) return;
+    postToTrustedTop({
+      type: "INLINE_EDIT_SCROLL",
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+    });
+  }
+
+  window.addEventListener(
+    "scroll",
+    function () {
+      if (!scrollForwarding || scrollRaf) return;
+      scrollRaf = requestAnimationFrame(emitScroll);
+    },
+    { passive: true, capture: true },
+  );
+
+  async function handleCaptureRequest(event) {
+    const requestId = event.data.requestId;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    function postResult(dataUrl) {
+      postToTrustedTop({
+        type: "INLINE_EDIT_SCREENSHOT_RESULT",
+        requestId,
+        dataUrl,
+        scrollX,
+        scrollY,
+      });
+    }
+
+    try {
+      // Wait for any pending web fonts to resolve so both inline metrics and
+      // the @font-face inlining below see the same loaded faces.
+      if (document.fonts && document.fonts.ready) {
+        try {
+          await document.fonts.ready;
+        } catch (_error) {}
+      }
+
+      const clone = document.documentElement.cloneNode(true);
+      inlineAll(document.documentElement, clone);
+
+      const removedNodes = clone.querySelectorAll("script,link[rel=\"stylesheet\"],style");
+      for (let index = 0; index < removedNodes.length; index += 1) {
+        removedNodes[index].remove();
+      }
+
+      stripExternal(clone);
+
+      // Re-embed web fonts as data-URI @font-face rules so the SVG rasterizer
+      // can resolve them — external font URLs aren't fetched during
+      // foreignObject rendering, which would otherwise force a fallback face
+      // and change text metrics.
+      const inlinedFontCss = await buildInlinedFontCss();
+      if (inlinedFontCss) {
+        const styleEl = document.createElement("style");
+        styleEl.textContent = inlinedFontCss;
+        const head = clone.querySelector("head");
+        if (head) head.appendChild(styleEl);
+        else clone.insertBefore(styleEl, clone.firstChild);
+      }
+
+      const html = new XMLSerializer().serializeToString(clone);
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+        '<foreignObject width="100%" height="100%">' +
+        `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden">` +
+        `<div style="position:relative;left:-${scrollX}px;top:-${scrollY}px">` +
+        html +
+        "</div></div></foreignObject></svg>";
+      const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      const image = new Image();
+      image.onload = function () {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(image, 0, 0);
+        postResult(canvas.toDataURL("image/png"));
+      };
+      image.onerror = function () {
+        postResult(null);
+      };
+      image.src = svgUrl;
+    } catch (_error) {
+      postResult(null);
+    }
+  }
+
+  window.addEventListener("message", function (event) {
+    if (!event.data) return;
+    // Only accept messages from the direct parent frame. Blocks sibling /
+    // unrelated-window postMessage senders that could otherwise reach us.
+    if (event.source !== window.parent) return;
+
+    const trustedParentOrigin = getTrustedParentOrigin(event);
+    if (!trustedParentOrigin) return;
+    trustedTopOrigin = trustedParentOrigin;
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_START") {
+      scrollForwarding = true;
+      emitScroll();
+      return;
+    }
+
+    if (event.data.type === "INLINE_EDIT_SCROLL_STOP") {
+      scrollForwarding = false;
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
+      scrollRaf = 0;
+      return;
+    }
+
+    if (event.data.type !== "INLINE_EDIT_CAPTURE_REQUEST") return;
+
+    handleCaptureRequest(event);
+  });
+})();
+
+
+</script></body>
 </html>
