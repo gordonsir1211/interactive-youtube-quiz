@@ -508,7 +508,7 @@ footer.site-footer {
 
 <main>
   <h1 class="page-title">影片問答關卡</h1>
-  <p class="page-desc">貼上 YouTube 連結，設定影片播放中會出現的四選一問題。影片會在指定時間點自動暫停出題，學生答對才會繼續播放 —— 適合用作觀影中隨堂測驗。</p>
+  <p class="page-desc">貼上 YouTube 連結，設定一題四選一問題。學生要先答對，才能開始播放影片 —— 適合用作課前暖身或觀影前測驗。</p>
 
   <div class="workspace">
     <!-- LEFT: video -->
@@ -538,7 +538,7 @@ footer.site-footer {
           <div id="player" style="display:none;"></div>
           <div class="lock-overlay" id="lock-overlay">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-            <p id="lock-overlay-text">先完成右邊的問答，答對後即可繼續播放</p>
+            <p>先完成右邊的問答，答對後即可繼續播放</p>
           </div>
         </div>
 
@@ -575,20 +575,14 @@ footer.site-footer {
               </div>
               <button class="btn btn-primary" id="ai-generate-btn">✨ AI 自動出題</button>
             </div>
-            <p class="hint-text">提示：若文字稿包含時間戳記（例如 [01:23]），AI 會依內容自動安排每題在影片中暫停的時間點；若無時間戳記，AI 會依內容順序平均分配時間點。</p>
             <p class="hint-text" id="ai-status"></p>
           </div>
 
           <div class="setup-divider"><span>或手動新增一題</span></div>
 
           <div class="field">
-            <label for="q-text">題目</label>
+            <label for="q-text">題目（觀看影片前作答）</label>
             <input type="text" id="q-text" placeholder="例如：這段影片主要介紹什麼？" />
-          </div>
-
-          <div class="field">
-            <label for="q-timestamp">影片暫停出題的時間點（分:秒，例如 1:30）</label>
-            <input type="text" id="q-timestamp" placeholder="例如 1:30 或 90" />
           </div>
 
           <div class="field">
@@ -666,41 +660,13 @@ footer.site-footer {
   let ytPlayer = null;
   let playerReady = false;
   let pendingVideoId = null;
-  let questionBank = []; // draft list: { question, options: [4], correctIndex, timestampSeconds }
-  let quizList = [];     // locked/saved list used during play, sorted by timestampSeconds
-  let currentQuestionIdx = 0; // index into quizList of the NEXT question to trigger (-1 sentinel unused)
-  let answered = false;  // whether the CURRENT (active/paused) question has been answered correctly
-  let quizActive = false;      // true once quizList is locked and gating is armed
-  let pollTimer = null;        // setInterval handle polling playback time
-  let awaitingQuestion = false; // true while a question is actively shown/paused for
+  let questionBank = []; // draft list: { question, options: [4], correctIndex }
+  let quizList = [];     // locked/saved list used during play
+  let currentQuestionIdx = 0; // index into quizList during play
+  let answered = false;  // whether the CURRENT question has been answered correctly
 
-  const API = 'port/8000'.startsWith('__')
-    ? 'http://localhost:8000'
-    : new URL('port/8000/', window.location.href).href.replace(/\/$/, '');
-
-  function parseTimestamp(raw) {
-    // Accepts "90", "1:30", "01:23:45" -> seconds (int), or null if invalid.
-    if (raw == null) return null;
-    const str = String(raw).trim();
-    if (!str) return null;
-    if (/^\d+$/.test(str)) return parseInt(str, 10);
-    const parts = str.split(':').map((p) => p.trim());
-    if (parts.length < 2 || parts.length > 3 || parts.some((p) => !/^\d+$/.test(p))) return null;
-    const nums = parts.map((p) => parseInt(p, 10));
-    let seconds = 0;
-    for (const n of nums) seconds = seconds * 60 + n;
-    return seconds;
-  }
-
-  function formatTimestamp(totalSeconds) {
-    const s = Math.max(0, Math.round(totalSeconds));
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
-    const ss = String(sec).padStart(2, '0');
-    return h > 0 ? h + ':' + mm + ':' + ss : mm + ':' + ss;
-  }
+  // Explicitly point to the FastAPI backend URL
+  const API = 'http://localhost:8000';
 
   const els = {
     ytUrl: document.getElementById('yt-url'),
@@ -709,7 +675,6 @@ footer.site-footer {
     placeholder: document.getElementById('player-placeholder'),
     playerDiv: document.getElementById('player'),
     lockOverlay: document.getElementById('lock-overlay'),
-    lockOverlayText: document.getElementById('lock-overlay-text'),
     statusDot: document.getElementById('status-dot'),
     statusText: document.getElementById('status-text'),
 
@@ -724,7 +689,6 @@ footer.site-footer {
     aiStatus: document.getElementById('ai-status'),
 
     qText: document.getElementById('q-text'),
-    qTimestamp: document.getElementById('q-timestamp'),
     optInputs: Array.from(document.querySelectorAll('[data-opt]')),
     optLetters: Array.from(document.querySelectorAll('.option-letter')),
     correctLabel: document.getElementById('correct-label'),
@@ -748,7 +712,6 @@ footer.site-footer {
   };
 
   let currentVideoId = null;
-
   let correctIndex = 0;
 
   // ---------- Extract video ID ----------
@@ -837,25 +800,28 @@ footer.site-footer {
           playerReady = true;
           clearTimeout(window.__ytReadyTimeout);
           hidePlayerError();
-          if (quizActive) armQuizForPlayback();
+          applyLockState();
           setStatus('影片已載入', 'paused');
         },
         onStateChange: function (e) {
-          if (e.data === YT.PlayerState.PLAYING) {
-            setStatus('播放中', 'live');
-            if (quizActive && !awaitingQuestion) startPolling();
-          } else if (e.data === YT.PlayerState.PAUSED) {
-            setStatus('已暫停', 'paused');
-          } else if (e.data === YT.PlayerState.ENDED) {
-            setStatus('播放完畢', 'paused');
-            stopPolling();
-          }
+          if (e.data === YT.PlayerState.PLAYING) setStatus('播放中', 'live');
+          else if (e.data === YT.PlayerState.PAUSED) setStatus('已暫停', 'paused');
+          else if (e.data === YT.PlayerState.ENDED) setStatus('播放完畢', 'paused');
         },
         onError: function (e) {
           showPlayerError(e.data);
         },
       },
     });
+  }
+
+  function applyLockState() {
+    if (!playerReady) return;
+    const shouldLock = quizList.length > 0 && currentQuestionIdx < quizList.length;
+    els.lockOverlay.classList.toggle('active', shouldLock);
+    if (shouldLock) {
+      try { ytPlayer.pauseVideo(); } catch (e) {}
+    }
   }
 
   els.loadBtn.addEventListener('click', () => {
@@ -875,7 +841,6 @@ footer.site-footer {
       pendingVideoId = id;
       setStatus('正在準備播放器…', undefined);
     }
-    // if a quiz already exists, reset play progress for the new video
     if (quizList.length) {
       resetPlayProgress();
       renderPlayView();
@@ -895,15 +860,13 @@ footer.site-footer {
   // ---------- Question bank (draft list before locking) ----------
   function renderQuestionBank() {
     els.questionBankEl.innerHTML = '';
-    // Keep the setup list sorted by timestamp so teachers see playback order.
-    questionBank.sort((a, b) => a.timestampSeconds - b.timestampSeconds);
     els.bankEmptyHint.style.display = questionBank.length ? 'none' : 'block';
     questionBank.forEach((q, idx) => {
       const row = document.createElement('div');
       row.className = 'bank-item';
       row.innerHTML =
         '<span class="bank-index">' + (idx + 1) + '</span>' +
-        '<span class="bank-question">⏱️ ' + formatTimestamp(q.timestampSeconds) + ' ' + escapeHtml(q.question) + '</span>' +
+        '<span class="bank-question">' + escapeHtml(q.question) + '</span>' +
         '<button type="button" class="bank-remove" aria-label="刪除這題">×</button>';
       row.querySelector('.bank-remove').addEventListener('click', () => {
         questionBank.splice(idx, 1);
@@ -915,7 +878,6 @@ footer.site-footer {
 
   function resetManualForm() {
     els.qText.value = '';
-    els.qTimestamp.value = '';
     els.optInputs.forEach((i) => (i.value = ''));
     correctIndex = 0;
     els.optLetters.forEach((o) => o.classList.remove('correct-flag'));
@@ -936,16 +898,10 @@ footer.site-footer {
   els.addQuestionBtn.addEventListener('click', () => {
     const question = els.qText.value.trim();
     const options = els.optInputs.map((i) => i.value.trim());
-    const timestampSeconds = parseTimestamp(els.qTimestamp.value);
 
     if (!question) {
       els.qText.focus();
       setStatus('請先輸入題目', undefined);
-      return;
-    }
-    if (timestampSeconds === null) {
-      els.qTimestamp.focus();
-      setStatus('請輸入有效的時間點（例如 1:30 或 90）', undefined);
       return;
     }
     if (options.some((o) => !o)) {
@@ -955,7 +911,7 @@ footer.site-footer {
       return;
     }
 
-    questionBank.push({ question, options: options.slice(), correctIndex, timestampSeconds });
+    questionBank.push({ question, options: options.slice(), correctIndex });
     renderQuestionBank();
     resetManualForm();
   });
@@ -965,13 +921,11 @@ footer.site-footer {
       setStatus('請先新增至少一題（手動或 AI 自動出題）', undefined);
       return;
     }
-    quizList = questionBank
-      .map((q) => ({ ...q }))
-      .sort((a, b) => a.timestampSeconds - b.timestampSeconds);
+    quizList = questionBank.map((q) => ({ ...q }));
     resetPlayProgress();
     renderPlayView();
     switchTab('play');
-    armQuizForPlayback();
+    applyLockState();
   });
 
   // ---------- AI question generation ----------
@@ -991,11 +945,6 @@ footer.site-footer {
       return;
     }
 
-    let videoDurationSeconds = 0;
-    if (ytPlayer && playerReady) {
-      try { videoDurationSeconds = Math.round(ytPlayer.getDuration()) || 0; } catch (e) {}
-    }
-
     els.aiGenerateBtn.disabled = true;
     setAiStatus('AI 正在出題中……請稍候', undefined);
 
@@ -1003,29 +952,21 @@ footer.site-footer {
       const res = await fetch(API + '/api/generate-questions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript, count, video_duration_seconds: videoDurationSeconds }),
+        body: JSON.stringify({ transcript, count }),
       });
-      const rawBody = await res.text();
-      let data;
-      try {
-        data = JSON.parse(rawBody);
-      } catch (parseErr) {
-        const snippet = rawBody.slice(0, 120).replace(/\s+/g, ' ').trim();
-        throw new Error('伺服器回應非預期格式（狀態碼 ' + res.status + '，網址 ' + API + '）：' + (snippet || '（空白回應）'));
-      }
-      if (!res.ok) throw new Error(data.detail || '產生題目失敗（狀態碼 ' + res.status + '）');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || '產生題目失敗');
 
       const generated = (data.questions || []).map((q) => ({
         question: q.question,
         options: q.options.slice(),
         correctIndex: q.correctIndex,
-        timestampSeconds: q.timestampSeconds,
       }));
       if (!generated.length) throw new Error('AI 沒有產生任何題目');
 
       questionBank = questionBank.concat(generated);
       renderQuestionBank();
-      setAiStatus('✓ 已產生 ' + generated.length + ' 題，已加入下方題目列表（可在列表中確認每題的暫停時間點）。確認無誤後請點「儲存題目並鎖定影片」。', 'ok');
+      setAiStatus('✓ 已產生 ' + generated.length + ' 題，已加入下方題目列表。確認無誤後請點「儲存題目並鎖定影片」。', 'ok');
     } catch (err) {
       setAiStatus('✗ ' + (err.message || '產生題目時發生問題，請稍後再試。'), 'error');
     } finally {
@@ -1046,62 +987,14 @@ footer.site-footer {
   els.tabSetup.addEventListener('click', () => switchTab('setup'));
   els.tabPlay.addEventListener('click', () => switchTab('play'));
 
-  // ---------- Quiz play (in-video timestamp gating) ----------
-  // quizList is sorted by timestampSeconds. currentQuestionIdx points at the
-  // NEXT question that has not yet been triggered/answered. While a question
-  // is actively shown (paused, awaiting a correct answer) awaitingQuestion is
-  // true and currentQuestionIdx points at THAT question.
+  // ---------- Quiz play ----------
   function resetPlayProgress() {
     currentQuestionIdx = 0;
     answered = false;
-    awaitingQuestion = false;
-    stopPolling();
   }
 
   function allQuestionsDone() {
     return quizList.length > 0 && currentQuestionIdx >= quizList.length;
-  }
-
-  function armQuizForPlayback() {
-    quizActive = quizList.length > 0;
-    els.lockOverlayText.textContent = '影片播放中會在指定時間點自動暫停出題';
-    els.lockOverlay.classList.remove('active');
-    if (quizActive && ytPlayer && playerReady) {
-      startPolling();
-    }
-  }
-
-  function startPolling() {
-    stopPolling();
-    if (!quizActive) return;
-    pollTimer = setInterval(checkPlaybackForQuestion, 300);
-  }
-
-  function stopPolling() {
-    if (pollTimer) {
-      clearInterval(pollTimer);
-      pollTimer = null;
-    }
-  }
-
-  function checkPlaybackForQuestion() {
-    if (!quizActive || awaitingQuestion || allQuestionsDone()) return;
-    if (!ytPlayer || !playerReady) return;
-    let t;
-    try { t = ytPlayer.getCurrentTime(); } catch (e) { return; }
-    const q = quizList[currentQuestionIdx];
-    if (t >= q.timestampSeconds) {
-      triggerQuestion();
-    }
-  }
-
-  function triggerQuestion() {
-    awaitingQuestion = true;
-    answered = false;
-    try { ytPlayer.pauseVideo(); } catch (e) {}
-    els.lockOverlay.classList.add('active');
-    switchTab('play');
-    renderPlayView();
   }
 
   function renderPlayView() {
@@ -1111,34 +1004,21 @@ footer.site-footer {
       return;
     }
     els.quizEmpty.style.display = 'none';
+    els.questionCard.classList.add('active');
 
     if (allQuestionsDone()) {
-      els.questionCard.classList.add('active');
       els.questionProgress.textContent = '已完成所有題目';
-      els.playQuestionText.textContent = '✓ 全部答對了！影片可以播到結束。';
+      els.playQuestionText.textContent = '✓ 全部答對了！可以開始播放影片。';
       els.choicesContainer.innerHTML = '';
       els.feedback.className = 'feedback';
       els.feedback.textContent = '';
-      els.resumeBtn.style.display = 'none';
+      els.resumeBtn.textContent = '開始播放影片 ▶';
+      els.resumeBtn.style.display = 'inline-flex';
       return;
     }
 
-    if (!awaitingQuestion) {
-      // Between questions: video is playing (or about to), nothing to answer yet.
-      els.questionCard.classList.add('active');
-      const q = quizList[currentQuestionIdx];
-      els.questionProgress.textContent = '第 ' + (currentQuestionIdx + 1) + ' / ' + quizList.length + ' 題，將於 ' + formatTimestamp(q.timestampSeconds) + ' 暫停出題';
-      els.playQuestionText.textContent = '影片播放中……請繼續觀看，影片會自動暫停出題。';
-      els.choicesContainer.innerHTML = '';
-      els.feedback.className = 'feedback';
-      els.feedback.textContent = '';
-      els.resumeBtn.style.display = 'none';
-      return;
-    }
-
-    els.questionCard.classList.add('active');
     const q = quizList[currentQuestionIdx];
-    els.questionProgress.textContent = '第 ' + (currentQuestionIdx + 1) + ' / ' + quizList.length + ' 題（' + formatTimestamp(q.timestampSeconds) + '），作答後才能繼續播放';
+    els.questionProgress.textContent = '第 ' + (currentQuestionIdx + 1) + ' / ' + quizList.length + ' 題，作答後才能繼續';
     els.playQuestionText.textContent = q.question;
     els.feedback.className = 'feedback';
     els.feedback.textContent = '';
@@ -1163,8 +1043,8 @@ footer.site-footer {
       btnEl.classList.add('is-correct');
       els.feedback.className = 'feedback show ok';
       const isLast = currentQuestionIdx === quizList.length - 1;
-      els.feedback.textContent = isLast ? '✓ 答對了！已完成所有題目，即將繼續播放。' : '✓ 答對了！即將繼續播放影片。';
-      els.resumeBtn.textContent = isLast ? '完成，繼續播放 ▶' : '正確，繼續播放 ▶';
+      els.feedback.textContent = isLast ? '✓ 答對了！已完成所有題目，可以播放影片。' : '✓ 答對了！請繼續下一題。';
+      els.resumeBtn.textContent = isLast ? '開始播放影片 ▶' : '下一題 ▶';
       els.resumeBtn.style.display = 'inline-flex';
     } else {
       btnEl.classList.add('is-wrong');
@@ -1175,21 +1055,20 @@ footer.site-footer {
   }
 
   els.resumeBtn.addEventListener('click', () => {
-    // Guard: only advance if the CURRENT question has actually been answered
-    // correctly. Prevents a stray/duplicate click on a hidden resume button
-    // from skipping an unanswered question.
+    if (allQuestionsDone()) {
+      els.lockOverlay.classList.remove('active');
+      if (ytPlayer && playerReady) {
+        try { ytPlayer.playVideo(); } catch (e) {}
+      }
+      return;
+    }
     if (!answered) return;
     currentQuestionIdx += 1;
     answered = false;
-    awaitingQuestion = false;
-    els.lockOverlay.classList.remove('active');
-    renderPlayView();
-    if (ytPlayer && playerReady) {
-      try { ytPlayer.playVideo(); } catch (e) {}
-    }
     if (allQuestionsDone()) {
-      stopPolling();
+      applyLockState();
     }
+    renderPlayView();
   });
 
   // init
@@ -1197,334 +1076,5 @@ footer.site-footer {
   setStatus('尚未載入影片', undefined);
 })();
 </script>
-
-<script data-pplx-inline-edit>
-(function () {
-  if (window === window.top) return;
-
-  const allowedParentOrigins = ["https://www.perplexity.ai","https://perplexity.ai","https://testing.perplexity.ai","https://staging.perplexity.ai","https://*.preview.i.perplexity.ai","http://perplexity.localhost","http://localhost:1420","http://127.0.0.1:1420","http://localhost:3000","http://127.0.0.1:3000","http://localhost:5173","http://127.0.0.1:5173"];
-  const MAX_FONT_BYTES = 500 * 1024;
-  const MAX_TOTAL_FONT_BYTES = 2 * 1024 * 1024;
-  let scrollForwarding = false;
-  let scrollRaf = 0;
-  let trustedTopOrigin = null;
-
-  // Allow entries like "https://*.preview.i.perplexity.ai" — the wildcard
-  // matches a single DNS label (no dots), so "https://*.foo" cannot stretch
-  // across multiple labels.
-  function matchesAllowedOrigin(origin) {
-    if (!origin) return false;
-    for (const entry of allowedParentOrigins) {
-      if (!entry.includes("*")) {
-        if (entry === origin) return true;
-        continue;
-      }
-      const pattern = new RegExp(
-        "^" +
-          entry.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^.]+") +
-          "$",
-      );
-      if (pattern.test(origin)) return true;
-    }
-    return false;
-  }
-
-  // Trust decision: when the sender is same-origin-visible (event.origin is a
-  // real origin like https://www.perplexity.ai) we trust event.origin directly.
-  // When event.origin is "null" (opaque broker srcdoc), we fall back to the
-  // broker's stamped `parentOrigin` to identify the top window. The fallback
-  // is claim-only — we rely on the browser's native `targetOrigin` enforcement
-  // on the response path (see postToTrustedTop) to ensure replies can't be
-  // delivered to anyone but the actual top window of that claimed origin.
-  function getTrustedParentOrigin(event) {
-    const forwardedParentOrigin =
-      typeof event.data.parentOrigin === "string" ? event.data.parentOrigin : null;
-    const parentOrigin = event.origin === "null" ? forwardedParentOrigin : event.origin;
-    return matchesAllowedOrigin(parentOrigin) ? parentOrigin : null;
-  }
-
-  // All responses go to window.top with targetOrigin = the allowlisted origin.
-  // An attacker that iframes us inside their own null-origin broker can claim
-  // any parentOrigin they like, but the browser will drop the reply whenever
-  // the real top's origin doesn't match — so the screenshot never leaves.
-  function postToTrustedTop(message) {
-    if (!trustedTopOrigin) return;
-    try {
-      window.top.postMessage(message, trustedTopOrigin);
-    } catch (_error) {}
-  }
-
-  function inlineAll(original, clone) {
-    if (original.nodeType !== 1 || clone.nodeType !== 1) return;
-
-    try {
-      const computedStyle = getComputedStyle(original);
-      // cssText on a computed style is the serialized declaration in modern
-      // Chromium/Safari — a single read beats enumerating ~400 longhand
-      // properties. Firefox returns "" here, so we fall back on empty.
-      const serialized = computedStyle.cssText;
-      if (serialized) {
-        clone.style.cssText = serialized;
-      } else {
-        const parts = new Array(computedStyle.length);
-        for (let index = 0; index < computedStyle.length; index += 1) {
-          const property = computedStyle[index];
-          parts[index] = `${property}:${computedStyle.getPropertyValue(property)};`;
-        }
-        clone.style.cssText = parts.join("");
-      }
-    } catch (_error) {}
-
-    const originalChildren = original.children;
-    const clonedChildren = clone.children;
-    for (
-      let index = 0;
-      index < originalChildren.length && index < clonedChildren.length;
-      index += 1
-    ) {
-      inlineAll(originalChildren[index], clonedChildren[index]);
-    }
-  }
-
-  function extractFontUrl(srcValue) {
-    const matches = [
-      ...srcValue.matchAll(
-        /url\(["']?([^"')]+)["']?\)(?:\s*format\(["']?([^"')]+)["']?\))?/gi,
-      ),
-    ];
-    if (matches.length === 0) return null;
-    const woff2 = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff2"));
-    if (woff2) return woff2[1];
-    const woff = matches.find((m) => m[2] && m[2].toLowerCase().includes("woff"));
-    if (woff) return woff[1];
-    return matches[0][1];
-  }
-
-  // Cache resolved font URL -> data URI across captures. Fonts on a page
-  // essentially never change, and a batch run emits multiple captures back to
-  // back — without this we'd refetch + re-base64 every time.
-  const fontDataUriCache = new Map();
-  const SRC_DECLARATION_RE = /src\s*:\s*[^;}]+/i;
-
-  async function fetchAsDataUri(url) {
-    if (fontDataUriCache.has(url)) return fontDataUriCache.get(url);
-    let dataUri = null;
-    try {
-      const response = await fetch(url, { mode: "cors", credentials: "omit" });
-      if (response.ok) {
-        const blob = await response.blob();
-        if (blob.size <= MAX_FONT_BYTES) {
-          dataUri = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () =>
-              resolve(typeof reader.result === "string" ? reader.result : null);
-            reader.onerror = () => resolve(null);
-            reader.readAsDataURL(blob);
-          });
-        }
-      }
-    } catch (_error) {
-      dataUri = null;
-    }
-    fontDataUriCache.set(url, dataUri);
-    return dataUri;
-  }
-
-  function collectFontFaceRuleTexts() {
-    const rules = [];
-    for (const sheet of document.styleSheets) {
-      let cssRules;
-      try {
-        cssRules = sheet.cssRules;
-      } catch (_error) {
-        continue;
-      }
-      if (!cssRules) continue;
-      for (const rule of cssRules) {
-        const cssText = rule.cssText || "";
-        if (cssText.startsWith("@font-face")) rules.push(cssText);
-      }
-    }
-    return rules;
-  }
-
-  async function buildInlinedFontCss() {
-    const ruleTexts = collectFontFaceRuleTexts();
-    if (ruleTexts.length === 0) return null;
-
-    const resolved = ruleTexts.map((cssText) => {
-      if (!SRC_DECLARATION_RE.test(cssText)) return null;
-      const srcMatch = cssText.match(/src\s*:\s*([^;}]+)[;}]/i);
-      if (!srcMatch) return null;
-      const url = extractFontUrl(srcMatch[1]);
-      if (!url) return null;
-      try {
-        return { cssText, url: new URL(url, document.baseURI).href };
-      } catch (_error) {
-        return null;
-      }
-    });
-
-    const dataUris = await Promise.all(
-      resolved.map((entry) => (entry ? fetchAsDataUri(entry.url) : Promise.resolve(null))),
-    );
-
-    const inlined = [];
-    let totalBytes = 0;
-    for (let index = 0; index < resolved.length; index += 1) {
-      const entry = resolved[index];
-      const dataUri = dataUris[index];
-      if (!entry || !dataUri) continue;
-      const approxBytes = dataUri.length * 0.75;
-      if (totalBytes + approxBytes > MAX_TOTAL_FONT_BYTES) break;
-      totalBytes += approxBytes;
-      inlined.push(entry.cssText.replace(SRC_DECLARATION_RE, `src: url("${dataUri}")`));
-    }
-    return inlined.length > 0 ? inlined.join("\n") : null;
-  }
-
-  function stripExternal(clone) {
-    const images = clone.querySelectorAll("img");
-    for (let index = 0; index < images.length; index += 1) {
-      const src = images[index].getAttribute("src");
-      if (src && !src.startsWith("data:")) images[index].removeAttribute("src");
-    }
-
-    const elements = clone.querySelectorAll("*");
-    for (let index = 0; index < elements.length; index += 1) {
-      const style = elements[index].style.cssText;
-      if (style && style.includes("url(")) {
-        elements[index].style.cssText = style.replace(
-          /url\(["']?(?!data:)[^)"']*["']?\)/gi,
-          "none",
-        );
-      }
-    }
-  }
-
-  function emitScroll() {
-    scrollRaf = 0;
-    if (!scrollForwarding) return;
-    postToTrustedTop({
-      type: "INLINE_EDIT_SCROLL",
-      scrollX: window.scrollX,
-      scrollY: window.scrollY,
-    });
-  }
-
-  window.addEventListener(
-    "scroll",
-    function () {
-      if (!scrollForwarding || scrollRaf) return;
-      scrollRaf = requestAnimationFrame(emitScroll);
-    },
-    { passive: true, capture: true },
-  );
-
-  async function handleCaptureRequest(event) {
-    const requestId = event.data.requestId;
-    const scrollX = window.scrollX;
-    const scrollY = window.scrollY;
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-
-    function postResult(dataUrl) {
-      postToTrustedTop({
-        type: "INLINE_EDIT_SCREENSHOT_RESULT",
-        requestId,
-        dataUrl,
-        scrollX,
-        scrollY,
-      });
-    }
-
-    try {
-      // Wait for any pending web fonts to resolve so both inline metrics and
-      // the @font-face inlining below see the same loaded faces.
-      if (document.fonts && document.fonts.ready) {
-        try {
-          await document.fonts.ready;
-        } catch (_error) {}
-      }
-
-      const clone = document.documentElement.cloneNode(true);
-      inlineAll(document.documentElement, clone);
-
-      const removedNodes = clone.querySelectorAll("script,link[rel=\"stylesheet\"],style");
-      for (let index = 0; index < removedNodes.length; index += 1) {
-        removedNodes[index].remove();
-      }
-
-      stripExternal(clone);
-
-      // Re-embed web fonts as data-URI @font-face rules so the SVG rasterizer
-      // can resolve them — external font URLs aren't fetched during
-      // foreignObject rendering, which would otherwise force a fallback face
-      // and change text metrics.
-      const inlinedFontCss = await buildInlinedFontCss();
-      if (inlinedFontCss) {
-        const styleEl = document.createElement("style");
-        styleEl.textContent = inlinedFontCss;
-        const head = clone.querySelector("head");
-        if (head) head.appendChild(styleEl);
-        else clone.insertBefore(styleEl, clone.firstChild);
-      }
-
-      const html = new XMLSerializer().serializeToString(clone);
-      const svg =
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
-        '<foreignObject width="100%" height="100%">' +
-        `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${width}px;height:${height}px;overflow:hidden">` +
-        `<div style="position:relative;left:-${scrollX}px;top:-${scrollY}px">` +
-        html +
-        "</div></div></foreignObject></svg>";
-      const svgUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-      const image = new Image();
-      image.onload = function () {
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext("2d").drawImage(image, 0, 0);
-        postResult(canvas.toDataURL("image/png"));
-      };
-      image.onerror = function () {
-        postResult(null);
-      };
-      image.src = svgUrl;
-    } catch (_error) {
-      postResult(null);
-    }
-  }
-
-  window.addEventListener("message", function (event) {
-    if (!event.data) return;
-    // Only accept messages from the direct parent frame. Blocks sibling /
-    // unrelated-window postMessage senders that could otherwise reach us.
-    if (event.source !== window.parent) return;
-
-    const trustedParentOrigin = getTrustedParentOrigin(event);
-    if (!trustedParentOrigin) return;
-    trustedTopOrigin = trustedParentOrigin;
-
-    if (event.data.type === "INLINE_EDIT_SCROLL_START") {
-      scrollForwarding = true;
-      emitScroll();
-      return;
-    }
-
-    if (event.data.type === "INLINE_EDIT_SCROLL_STOP") {
-      scrollForwarding = false;
-      if (scrollRaf) cancelAnimationFrame(scrollRaf);
-      scrollRaf = 0;
-      return;
-    }
-
-    if (event.data.type !== "INLINE_EDIT_CAPTURE_REQUEST") return;
-
-    handleCaptureRequest(event);
-  });
-})();
-
-
-</script></body>
+</body>
 </html>
