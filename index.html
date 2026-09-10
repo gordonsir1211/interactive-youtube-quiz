@@ -674,7 +674,9 @@ footer.site-footer {
   let pollTimer = null;        // setInterval handle polling playback time
   let awaitingQuestion = false; // true while a question is actively shown/paused for
 
-  const API = 'port/8000'.startsWith('__') ? 'http://localhost:8000' : 'port/8000';
+  const API = 'port/8000'.startsWith('__')
+    ? 'http://localhost:8000'
+    : new URL('port/8000/', window.location.href).href.replace(/\/$/, '');
 
   function parseTimestamp(raw) {
     // Accepts "90", "1:30", "01:23:45" -> seconds (int), or null if invalid.
