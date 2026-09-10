@@ -1005,8 +1005,15 @@ footer.site-footer {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcript, count, video_duration_seconds: videoDurationSeconds }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || '產生題目失敗');
+      const rawBody = await res.text();
+      let data;
+      try {
+        data = JSON.parse(rawBody);
+      } catch (parseErr) {
+        const snippet = rawBody.slice(0, 120).replace(/\s+/g, ' ').trim();
+        throw new Error('伺服器回應非預期格式（狀態碼 ' + res.status + '，網址 ' + API + '）：' + (snippet || '（空白回應）'));
+      }
+      if (!res.ok) throw new Error(data.detail || '產生題目失敗（狀態碼 ' + res.status + '）');
 
       const generated = (data.questions || []).map((q) => ({
         question: q.question,
